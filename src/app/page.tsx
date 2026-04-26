@@ -2,10 +2,10 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Activity, Database, Play, Sparkles, RefreshCw, ChevronRight } from 'lucide-react';
+import { Activity, Database, Play, Sparkles, RefreshCw, ChevronRight, Trophy, Target, ListOrdered } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 import * as tf from '@tensorflow/tfjs';
-import { processData, createDataset, buildModel, ProcessedDraw } from '../lib/model';
+import { processData, createDataset, buildAdvancedModel, runBacktest, ProcessedDraw } from '../lib/model';
 
 export default function Home() {
   const [data, setData] = useState<ProcessedDraw[]>([]);
@@ -15,6 +15,8 @@ export default function Home() {
   const [lossHistory, setLossHistory] = useState<{ epoch: number; loss: number }[]>([]);
   const [prediction, setPrediction] = useState<number[] | null>(null);
   const [modelReady, setModelReady] = useState(false);
+  const [isBacktesting, setIsBacktesting] = useState(false);
+  const [backtestStats, setBacktestStats] = useState<{ testSize: number, avgBonsNumeros: string, winRate: string } | null>(null);
 
   // Keep references for tensorflow model and data
   const tfModel = useRef<tf.Sequential | null>(null);
@@ -34,7 +36,7 @@ export default function Home() {
         scalerRef.current = scaler;
         lastTwelveRef.current = lastTwelve;
         
-        tfModel.current = buildModel(12, 19, 6);
+        tfModel.current = buildAdvancedModel(12, 19, 6);
         setModelReady(true);
       }
     } catch (e) {
@@ -98,6 +100,22 @@ export default function Home() {
     setPrediction(finalPred);
   };
 
+  const handleBacktest = async () => {
+    if (data.length === 0) return;
+    setIsBacktesting(true);
+    setBacktestStats(null);
+    setProgress(0);
+    
+    try {
+      const stats = await runBacktest(data, 12, 50, (p) => setProgress(p));
+      if (stats) setBacktestStats(stats);
+    } catch (e) {
+      console.error(e);
+    }
+    
+    setIsBacktesting(false);
+  };
+
   return (
     <main className="min-h-screen p-8 md:p-16">
       <header className="mb-12 text-center">
@@ -156,19 +174,29 @@ export default function Home() {
           <hr className="border-slate-700/50 my-2" />
 
           <h2 className="text-2xl font-semibold flex items-center gap-2">
-            <Activity className="w-6 h-6 text-primary" /> Apprentissage
+            <Activity className="w-6 h-6 text-primary" /> Apprentissage & Backtest
           </h2>
           <p className="text-slate-400 text-sm">
-            Entraînez le réseau de neurones LSTM sur les séquences temporelles.
+            Entraînez le réseau de neurones LSTM Bidirectionnel ou testez ses performances.
           </p>
-          <button 
-            onClick={handleTrain} 
-            disabled={!modelReady || isTraining}
-            className="glow-button flex items-center justify-center gap-2"
-          >
-            {isTraining ? <RefreshCw className="w-5 h-5 animate-spin" /> : <Play className="w-5 h-5" />}
-            {isTraining ? `Entraînement... ${progress}%` : "Lancer l'Entraînement"}
-          </button>
+          <div className="flex gap-2 flex-col xl:flex-row">
+            <button 
+              onClick={handleTrain} 
+              disabled={!modelReady || isTraining || isBacktesting}
+              className="glow-button flex-1 flex items-center justify-center gap-2"
+            >
+              {isTraining ? <RefreshCw className="w-5 h-5 animate-spin" /> : <Play className="w-5 h-5" />}
+              {isTraining ? `Entraînement... ${progress}%` : "Entraîner"}
+            </button>
+            <button 
+              onClick={handleBacktest} 
+              disabled={data.length === 0 || isTraining || isBacktesting}
+              className="px-4 py-3 rounded-lg font-medium transition-all bg-slate-800/80 hover:bg-slate-700 text-white flex items-center justify-center gap-2 whitespace-nowrap"
+            >
+              {isBacktesting ? <RefreshCw className="w-5 h-5 animate-spin" /> : <Activity className="w-5 h-5" />}
+              {isBacktesting ? `Calculs... ${progress}%` : "Backtest (50 tirages)"}
+            </button>
+          </div>
 
           {isTraining && (
             <div className="w-full bg-slate-800 rounded-full h-2 mt-2 overflow-hidden">
@@ -213,6 +241,33 @@ export default function Home() {
               </div>
             )}
           </div>
+          
+          {backtestStats && (
+            <motion.div 
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="mt-6 grid grid-cols-1 sm:grid-cols-3 gap-4"
+            >
+              <div className="p-4 rounded-2xl bg-gradient-to-br from-slate-800/80 to-slate-900/80 border border-slate-700/50 flex flex-col items-center justify-center relative overflow-hidden group shadow-lg">
+                <div className="absolute inset-0 bg-blue-500/10 blur-xl group-hover:bg-blue-500/20 transition-all"></div>
+                <ListOrdered className="w-6 h-6 text-blue-400 mb-2 z-10" />
+                <p className="text-sm text-slate-400 z-10 font-medium text-center">Échantillon Test</p>
+                <p className="text-2xl font-bold text-white z-10 mt-1">{backtestStats.testSize}</p>
+              </div>
+              <div className="p-4 rounded-2xl bg-gradient-to-br from-slate-800/80 to-slate-900/80 border border-slate-700/50 flex flex-col items-center justify-center relative overflow-hidden group shadow-lg">
+                <div className="absolute inset-0 bg-accent/10 blur-xl group-hover:bg-accent/20 transition-all"></div>
+                <Target className="w-6 h-6 text-accent mb-2 z-10" />
+                <p className="text-sm text-slate-400 z-10 font-medium text-center">Bons Num. Moy.</p>
+                <p className="text-2xl font-bold text-white z-10 mt-1">{backtestStats.avgBonsNumeros}</p>
+              </div>
+              <div className="p-4 rounded-2xl bg-gradient-to-br from-slate-800/80 to-slate-900/80 border border-slate-700/50 flex flex-col items-center justify-center relative overflow-hidden group shadow-lg">
+                <div className="absolute inset-0 bg-primary/10 blur-xl group-hover:bg-primary/20 transition-all"></div>
+                <Trophy className="w-6 h-6 text-primary mb-2 z-10" />
+                <p className="text-sm text-slate-400 z-10 font-medium text-center">Grilles Gagnantes</p>
+                <p className="text-2xl font-bold text-white z-10 mt-1">{backtestStats.winRate}<span className="text-lg font-normal text-slate-400">%</span></p>
+              </div>
+            </motion.div>
+          )}
         </motion.div>
 
         {/* Prédiction */}

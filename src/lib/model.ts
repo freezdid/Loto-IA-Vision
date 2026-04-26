@@ -152,3 +152,109 @@ export function buildModel(windowLength: number, numFeatures: number, numLabels:
 
   return model;
 }
+
+export function buildAdvancedModel(windowLength: number, numFeatures: number, numLabels: number) {
+  const model = tf.sequential();
+  
+  // Couche Bidirectionnelle LSTM pour analyser dans les deux sens
+  model.add(tf.layers.bidirectional({
+    layer: tf.layers.lstm({ units: 128, returnSequences: true }) as any,
+    inputShape: [windowLength, numFeatures],
+    mergeMode: 'concat'
+  }));
+  
+  model.add(tf.layers.dropout({ rate: 0.2 }));
+  
+  model.add(tf.layers.bidirectional({
+    layer: tf.layers.lstm({ units: 64, returnSequences: false }) as any,
+    mergeMode: 'concat'
+  }));
+  
+  model.add(tf.layers.dropout({ rate: 0.2 }));
+  
+  // Couches denses profondes
+  model.add(tf.layers.dense({ units: 64, activation: 'relu' }));
+  model.add(tf.layers.dense({ units: numLabels }));
+
+  model.compile({
+    loss: 'meanAbsoluteError',
+    optimizer: tf.train.adam(0.001),
+    metrics: ['accuracy']
+  });
+
+  return model;
+}
+
+export async function runBacktest(data: ProcessedDraw[], windowLength: number, testSize: number = 50, onProgress?: (p: number) => void) {
+  if (data.length <= testSize + windowLength) return null;
+  
+  // Split data
+  const trainData = data.slice(0, data.length - testSize);
+  const testData = data.slice(data.length - testSize - windowLength);
+  
+  const { X: xTrain, Y: yTrain, scaler } = createDataset(trainData, windowLength);
+  
+  // Preparer les donnees de test avec le MEME scaler
+  const testFeatures = testData.map(d => [
+    d.num0, d.num1, d.num2, d.num3, d.num4, d.chance,
+    d.freq_num0, d.freq_num1, d.freq_num2, d.freq_num3, d.freq_num4, d.freq_chance,
+    d.sum_diff, d.pair_chance, d.impair_chance, d.pair, d.impair, d.is_under_24, d.is_under_40
+  ]);
+  const scaledTest = scaler.transform(testFeatures);
+  const XTest: number[][][] = [];
+  const YTest: number[][] = [];
+  
+  for (let i = 0; i < scaledTest.length - windowLength; i++) {
+    XTest.push(scaledTest.slice(i, i + windowLength));
+    YTest.push(scaledTest[i + windowLength].slice(0, 6));
+  }
+  
+  const model = buildAdvancedModel(windowLength, 19, 6);
+  
+  // Train
+  const xs = tf.tensor3d(xTrain);
+  const ys = tf.tensor2d(yTrain);
+  const epochs = 30; // Rapide pour le backtest
+  await model.fit(xs, ys, { 
+    epochs, 
+    batchSize: 32, 
+    shuffle: true,
+    callbacks: {
+      onEpochEnd: (epoch) => {
+        if (onProgress) onProgress(Math.round(((epoch + 1) / epochs) * 100));
+      }
+    }
+  });
+  
+  // Predict
+  const xTestTensor = tf.tensor3d(XTest);
+  const predictions = model.predict(xTestTensor) as tf.Tensor;
+  const predArray = await predictions.array() as number[][];
+  
+  let totalBonsNumeros = 0;
+  let grillesGagnantes = 0; // Au moins 2 bons numeros ou le numero chance
+  
+  const means = scaler.means.slice(0, 6);
+  const stds = scaler.stds.slice(0, 6);
+  
+  for(let i=0; i<predArray.length; i++) {
+    const p = predArray[i].map((val, j) => Math.round((val * stds[j]) + means[j]));
+    const t = YTest[i].map((val, j) => Math.round((val * stds[j]) + means[j]));
+    
+    let bons = 0;
+    const vraisNumeros = t.slice(0,5);
+    for(let j=0; j<5; j++) {
+      if (vraisNumeros.includes(p[j])) bons++;
+    }
+    const chanceOk = p[5] === t[5];
+    
+    totalBonsNumeros += bons;
+    if (bons >= 2 || chanceOk) grillesGagnantes++;
+  }
+  
+  return {
+    testSize: predArray.length,
+    avgBonsNumeros: (totalBonsNumeros / predArray.length).toFixed(2),
+    winRate: ((grillesGagnantes / predArray.length) * 100).toFixed(1)
+  };
+}
