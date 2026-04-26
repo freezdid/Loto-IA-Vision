@@ -12,6 +12,7 @@ export default function Home() {
   const [isScraping, setIsScraping] = useState(false);
   const [isTraining, setIsTraining] = useState(false);
   const [progress, setProgress] = useState(0);
+  const [scrapeStatus, setScrapeStatus] = useState("");
   const [lossHistory, setLossHistory] = useState<{ epoch: number; loss: number }[]>([]);
   const [prediction, setPrediction] = useState<number[] | null>(null);
   const [modelReady, setModelReady] = useState(false);
@@ -25,13 +26,24 @@ export default function Home() {
 
   const handleScrape = async () => {
     setIsScraping(true);
+    setScrapeStatus("Connexion au serveur FDJ...");
     try {
+      await new Promise(r => setTimeout(r, 600)); // Effet visuel
+      setScrapeStatus("Extraction des tirages historiques...");
+      
       const res = await fetch('/api/loto');
       const json = await res.json();
+      
       if (json.success && json.results.length > 0) {
+        setScrapeStatus("Traitement et formatage des données...");
+        await new Promise(r => setTimeout(r, 600)); // Effet visuel
+        
         const processed = processData(json.results);
         setData(processed);
-        // Prepare model
+        
+        setScrapeStatus("Création des tenseurs TensorFlow...");
+        await new Promise(r => setTimeout(r, 500)); // Effet visuel
+        
         const { X, Y, scaler, lastTwelve } = createDataset(processed);
         scalerRef.current = scaler;
         lastTwelveRef.current = lastTwelve;
@@ -41,8 +53,10 @@ export default function Home() {
       }
     } catch (e) {
       console.error(e);
+      setScrapeStatus("Erreur de connexion");
     }
     setIsScraping(false);
+    setScrapeStatus("");
   };
 
   const handleTrain = async () => {
@@ -158,17 +172,66 @@ export default function Home() {
             {isScraping ? "Acquisition en cours..." : "Acquérir les Données"}
           </button>
           
-          {data.length > 0 && (
-            <div className="mt-4 p-4 rounded-lg bg-slate-900/50 border border-slate-700">
+          {isScraping && (
+            <motion.div 
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              className="mt-2 p-4 rounded-lg bg-slate-900 border border-slate-700 font-mono text-sm overflow-hidden relative"
+            >
+              <div className="absolute inset-0 bg-primary/5 animate-pulse"></div>
+              <div className="flex items-center gap-2 text-primary mb-2">
+                <Database className="w-4 h-4 animate-bounce" />
+                <span className="font-semibold">Synchronisation de la DB</span>
+              </div>
+              <p className="text-slate-300">[{scrapeStatus}]</p>
+              <div className="w-full bg-slate-800 rounded-full h-1 mt-3 overflow-hidden">
+                <motion.div 
+                  className="bg-primary h-1 rounded-full shadow-[0_0_10px_rgba(59,130,246,0.5)]"
+                  initial={{ x: "-100%" }}
+                  animate={{ x: "100%" }}
+                  transition={{ duration: 1.5, repeat: Infinity, ease: "linear" }}
+                  style={{ width: '50%' }}
+                />
+              </div>
+            </motion.div>
+          )}
+
+          {!isScraping && data.length > 0 && (
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              className="mt-2 p-4 rounded-lg bg-slate-900/50 border border-slate-700 shadow-inner"
+            >
               <div className="flex justify-between items-center mb-2">
-                <span className="text-slate-400 text-sm">Tirages collectés</span>
-                <span className="font-bold text-accent">{data.length}</span>
+                <span className="text-slate-400 text-sm">Volume Total</span>
+                <span className="font-bold text-accent">{data.length} grilles</span>
               </div>
-              <div className="flex justify-between items-center">
-                <span className="text-slate-400 text-sm">Dernier tirage</span>
-                <span className="font-medium text-white">{data[data.length-1].day} {data[data.length-1].month_year}</span>
+              <div className="flex justify-between items-center mb-4">
+                <span className="text-slate-400 text-sm">Dernière MaJ</span>
+                <span className="font-medium text-white text-sm">{data[data.length-1].day} {data[data.length-1].month_year}</span>
               </div>
-            </div>
+              
+              <div className="space-y-2 mt-4 pt-4 border-t border-slate-700/50">
+                <p className="text-xs text-slate-500 uppercase tracking-wider mb-2 font-semibold">Injections Récentes :</p>
+                {data.slice(-3).reverse().map((draw, idx) => (
+                  <motion.div 
+                    initial={{ opacity: 0, x: -10 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: idx * 0.15 }}
+                    key={idx} 
+                    className="flex items-center justify-between bg-slate-800/40 p-2.5 rounded-md text-sm border border-slate-700/30 hover:bg-slate-800/60 transition-colors"
+                  >
+                    <span className="text-slate-400 text-xs w-16 truncate">{draw.day.split(' ')[0]}</span>
+                    <div className="flex gap-1.5">
+                       {[draw.num0, draw.num1, draw.num2, draw.num3, draw.num4].map((n, i) => (
+                         <span key={i} className="w-5 h-5 flex items-center justify-center rounded-full bg-slate-700 text-[10px] font-bold text-white shadow-sm">{n}</span>
+                       ))}
+                       <span className="w-5 h-5 flex items-center justify-center rounded-full bg-primary/20 text-primary border border-primary/30 text-[10px] font-bold ml-1 shadow-sm">{draw.chance}</span>
+                    </div>
+                  </motion.div>
+                ))}
+              </div>
+            </motion.div>
           )}
 
           <hr className="border-slate-700/50 my-2" />
