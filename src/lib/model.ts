@@ -184,16 +184,27 @@ export function buildAdvancedModel(windowLength: number, numFeatures: number, nu
   
   // LSTM Path
   const lstm1 = tf.layers.bidirectional({
-    layer: tf.layers.lstm({ units: 128, returnSequences: true, kernelInitializer: 'glorotNormal' }) as any,
+    layer: tf.layers.lstm({ 
+      units: 128, 
+      returnSequences: true, 
+      kernelInitializer: 'glorotNormal',
+      recurrentInitializer: 'glorotNormal' 
+    }) as any,
     mergeMode: 'concat'
   }).apply(input) as tf.SymbolicTensor;
   
   const dropout1 = tf.layers.dropout({ rate: 0.2 }).apply(lstm1) as tf.SymbolicTensor;
   
   const lstm2 = tf.layers.bidirectional({
-    layer: tf.layers.lstm({ units: 64, returnSequences: true, kernelInitializer: 'glorotNormal' }) as any,
+    layer: tf.layers.lstm({ 
+      units: 64, 
+      returnSequences: true, 
+      kernelInitializer: 'glorotNormal',
+      recurrentInitializer: 'glorotNormal'
+    }) as any,
     mergeMode: 'concat'
   }).apply(dropout1) as tf.SymbolicTensor;
+
 
   // Simplified Attention / Gating (Fix for TFJS Softmax axis limitation)
   const attentionWeights = tf.layers.dense({ 

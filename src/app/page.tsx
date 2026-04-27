@@ -142,7 +142,17 @@ export default function Home() {
     setProgress(0);
 
     // Fine-tuning: check if model exists, if not create it
-    if (!tfModel.current) {
+    // OU si la taille de la fenêtre a changé (shape mismatch fix)
+    let shouldBuild = !tfModel.current;
+    if (tfModel.current) {
+      const modelWindow = tfModel.current.inputs[0].shape[1];
+      if (modelWindow !== windowLength) {
+        console.log(`Reconstruction du modèle : fenêtre ${modelWindow} -> ${windowLength}`);
+        shouldBuild = true;
+      }
+    }
+
+    if (shouldBuild) {
       tfModel.current = buildAdvancedModel(windowLength, 25, 6);
     }
 
@@ -499,8 +509,8 @@ export default function Home() {
             )}
           </AnimatePresence>
 
-          <div className="h-48 md:h-64 w-full min-h-[180px] z-10">
-            <ResponsiveContainer width="100%" height="100%">
+          <div className="h-48 md:h-64 w-full min-h-[180px] min-w-[0px] z-10">
+            <ResponsiveContainer width="100%" height="100%" minHeight={180}>
               <LineChart data={lossHistory}>
                  <Line type="monotone" dataKey="loss" stroke="#3b82f6" strokeWidth={2} dot={false} />
                  <Tooltip contentStyle={{ backgroundColor: '#020617', border: '1px solid rgba(59,130,246,0.2)', borderRadius: '12px' }} itemStyle={{ color: '#3b82f6' }} labelClassName="hidden" />
