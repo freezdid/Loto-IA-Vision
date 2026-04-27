@@ -5,7 +5,17 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Activity, Database, Play, Sparkles, RefreshCw, ChevronRight, Trophy, Target, ListOrdered, Brain, History, Settings, Calendar } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 import * as tf from '@tensorflow/tfjs';
-import { processData, createDataset, buildAdvancedModel, runBacktest, ProcessedDraw } from '../lib/model';
+import { 
+  processData, 
+  createDataset, 
+  buildAdvancedModel, 
+  buildFastModel,
+  runBacktest, 
+  ProcessedDraw,
+  initTensorFlow,
+  TRAINING_CONFIG
+} from '../lib/model';
+
 import { calculateFrequencies, analyzeTypicality } from '../lib/stats';
 import { loadDraws, saveDraws, saveModel, loadModel, hasSavedModel, loadPredictions, savePredictions, SavedPrediction, exportModel, saveLastPrediction, loadLastPrediction } from '../lib/storage';
 import Link from 'next/link';
@@ -33,6 +43,9 @@ export default function Home() {
   const [simNumbers, setSimNumbers] = useState<number[]>([1, 2, 3, 4, 5, 1]);
   const [simResult, setSimResult] = useState<{ score: number, analysis: string } | null>(null);
   const [isSyncingModel, setIsSyncingModel] = useState(false);
+  const [trainingMode, setTrainingMode] = useState<'fast' | 'precise'>('precise');
+  const [backendName, setBackendName] = useState("Chargement...");
+
 
   // Keep references for tensorflow model and data
   const tfModel = useRef<tf.LayersModel | null>(null);
@@ -43,7 +56,12 @@ export default function Home() {
   // Load and Auto-Update on mount
   useEffect(() => {
     async function init() {
+      // 0. Init TensorFlow Backend (WebGPU/WebGL)
+      await initTensorFlow();
+      setBackendName(tf.getBackend().toUpperCase());
+
       // 1. Load from cache first
+
       const savedDraws = await loadDraws();
       if (savedDraws && savedDraws.length > 0) {
         setData(savedDraws);
@@ -186,18 +204,23 @@ export default function Home() {
     setProgress(0);
 
     // Fine-tuning: check if model exists, if not create it
-    // OU si la taille de la fenêtre a changé (shape mismatch fix)
+    // OU si le mode d'entraînement a changé, ou si la taille de la fenêtre a changé
     let shouldBuild = !tfModel.current;
     if (tfModel.current) {
       const modelWindow = tfModel.current.inputs[0].shape[1];
-      if (modelWindow !== windowLength) {
-        console.log(`Reconstruction du modèle : fenêtre ${modelWindow} -> ${windowLength}`);
+      const modelIsAdvanced = tfModel.current.layers.length > 5; // Simple check: Advanced has more layers
+      const wantAdvanced = trainingMode === 'precise';
+
+      if (modelWindow !== windowLength || modelIsAdvanced !== wantAdvanced) {
+        console.log(`Reconstruction du modèle : fenêtre ${modelWindow}->${windowLength}, mode ${modelIsAdvanced ? 'Elite' : 'Turbo'}->${wantAdvanced ? 'Elite' : 'Turbo'}`);
         shouldBuild = true;
       }
     }
 
     if (shouldBuild) {
-      tfModel.current = buildAdvancedModel(windowLength, 25, 6);
+      tfModel.current = trainingMode === 'precise' 
+        ? buildAdvancedModel(windowLength, 25, 6) 
+        : buildFastModel(windowLength, 25, 6);
     }
 
     const { X, Y } = createDataset(data, windowLength);
@@ -207,13 +230,14 @@ export default function Home() {
       return;
     }
 
+    const config = TRAINING_CONFIG[trainingMode];
     const xs = tf.tensor3d(X);
     const ys = tf.tensor2d(Y);
-    const epochs = 50; // Quicker for fine-tuning
+    const epochs = config.epochs;
 
     await tfModel.current!.fit(xs, ys, {
       epochs,
-      batchSize: 32,
+      batchSize: config.batchSize,
       shuffle: true,
       callbacks: {
         onEpochEnd: (epoch, logs) => {
@@ -222,6 +246,7 @@ export default function Home() {
         }
       }
     });
+
     
     await saveModel(tfModel.current!);
     setHasModel(true);
@@ -615,10 +640,36 @@ export default function Home() {
                </p>
             </div>
 
-            <div className="p-3 rounded-xl bg-slate-900/50 border border-slate-800/50 space-y-1">
-              <p className="text-[10px] font-bold text-slate-500 uppercase tracking-tighter">Status Tenseurs</p>
-              <p className="text-xs font-mono text-accent">Optimisé / Active</p>
+            <div className="p-3 rounded-xl bg-slate-900/50 border border-slate-800/50 space-y-2">
+              <p className="text-[10px] font-bold text-slate-500 uppercase tracking-tighter">Accélération Matérielle</p>
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-mono text-accent">{backendName}</span>
+                <span className="flex h-2 w-2 rounded-full bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]" />
+              </div>
             </div>
+
+            <div className="space-y-3 pt-4 border-t border-slate-800/50">
+               <label className="text-xs font-bold text-slate-500 uppercase block">Mode d'Entraînement</label>
+               <div className="grid grid-cols-2 gap-2">
+                 {(['fast', 'precise'] as const).map(mode => (
+                   <button 
+                     key={mode}
+                     onClick={() => setTrainingMode(mode)}
+                     className={`px-3 py-2 rounded-xl text-[10px] font-black uppercase transition-all border ${
+                       trainingMode === mode 
+                        ? 'bg-primary text-white border-primary shadow-[0_0_15px_rgba(59,130,246,0.3)]' 
+                        : 'bg-slate-900/50 text-slate-500 border-white/5 hover:border-white/10'
+                     }`}
+                   >
+                     {TRAINING_CONFIG[mode].label.split(' ')[0]}
+                   </button>
+                 ))}
+               </div>
+               <p className="text-[9px] text-slate-500 italic px-1">
+                 {TRAINING_CONFIG[trainingMode].desc} • {TRAINING_CONFIG[trainingMode].epochs} époques
+               </p>
+            </div>
+
           </div>
         </motion.div>
 

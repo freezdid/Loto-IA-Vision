@@ -1,4 +1,34 @@
 import * as tf from '@tensorflow/tfjs';
+import '@tensorflow/tfjs-backend-webgpu';
+
+export async function initTensorFlow() {
+  await tf.ready();
+  if (tf.engine().backendName !== 'webgpu') {
+    try {
+      await tf.setBackend('webgpu');
+      console.log('Backend WebGPU activé');
+    } catch (e) {
+      console.warn('WebGPU non supporté, repli sur WebGL');
+      await tf.setBackend('webgl');
+    }
+  }
+}
+
+export const TRAINING_CONFIG = {
+  fast: {
+    epochs: 25,
+    batchSize: 128,
+    label: 'Turbo (Rapide)',
+    desc: 'Idéal pour le quotidien'
+  },
+  precise: {
+    epochs: 50,
+    batchSize: 64,
+    label: 'Elite (Précis)',
+    desc: 'Analyse approfondie'
+  }
+};
+
 
 export interface LotoDraw {
   day: string;
@@ -192,6 +222,27 @@ export function buildModel(windowLength: number, numFeatures: number, numLabels:
 
   return model;
 }
+
+export function buildFastModel(windowLength: number, numFeatures: number, numLabels: number) {
+  const model = tf.sequential();
+  model.add(tf.layers.lstm({
+    units: 64,
+    inputShape: [windowLength, numFeatures],
+    returnSequences: false,
+    kernelInitializer: 'glorotNormal'
+  }));
+  model.add(tf.layers.dense({ units: 32, activation: 'relu' }));
+  model.add(tf.layers.dense({ units: numLabels }));
+
+  model.compile({
+    loss: 'meanAbsoluteError',
+    optimizer: tf.train.adam(0.001),
+    metrics: ['accuracy']
+  });
+
+  return model;
+}
+
 
 export function buildAdvancedModel(windowLength: number, numFeatures: number, numLabels: number) {
   const input = tf.input({ shape: [windowLength, numFeatures] });
