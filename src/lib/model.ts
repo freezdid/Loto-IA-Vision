@@ -195,29 +195,34 @@ export function buildAdvancedModel(windowLength: number, numFeatures: number, nu
     mergeMode: 'concat'
   }).apply(dropout1) as tf.SymbolicTensor;
 
-  // Simplified Attention / Gating
+  // Simplified Attention / Gating (Fix for TFJS Softmax axis limitation)
   const attentionWeights = tf.layers.dense({ 
     units: 1, 
-    activation: 'tanh' 
+    activation: 'tanh',
+    kernelInitializer: 'glorotNormal'
   }).apply(lstm2) as tf.SymbolicTensor;
   
-  const softWeights = tf.layers.softmax({ axis: 1 }).apply(attentionWeights) as tf.SymbolicTensor;
-  const weighted = tf.layers.multiply().apply([lstm2, softWeights]) as tf.SymbolicTensor;
+  const flattenedWeights = tf.layers.flatten().apply(attentionWeights) as tf.SymbolicTensor;
+  const softWeights = tf.layers.softmax().apply(flattenedWeights) as tf.SymbolicTensor;
+  const reshapedWeights = tf.layers.reshape({ targetShape: [windowLength, 1] }).apply(softWeights) as tf.SymbolicTensor;
+  
+  const weighted = tf.layers.multiply().apply([lstm2, reshapedWeights]) as tf.SymbolicTensor;
   const pooled = tf.layers.globalAveragePooling1d().apply(weighted) as tf.SymbolicTensor;
 
-  const dense1 = tf.layers.dense({ units: 64, activation: 'relu' }).apply(pooled) as tf.SymbolicTensor;
-  const output = tf.layers.dense({ units: numLabels }).apply(dense1) as tf.SymbolicTensor;
+  const dense1 = tf.layers.dense({ units: 64, activation: 'relu', kernelInitializer: 'glorotNormal' }).apply(pooled) as tf.SymbolicTensor;
+  const output = tf.layers.dense({ units: numLabels, kernelInitializer: 'glorotNormal' }).apply(dense1) as tf.SymbolicTensor;
 
   const model = tf.model({ inputs: input, outputs: output });
 
   model.compile({
     loss: 'meanAbsoluteError',
-    optimizer: tf.train.adam(0.0005), // LR plus faible pour l'attention
+    optimizer: tf.train.adam(0.0005),
     metrics: ['accuracy']
   });
 
   return model;
 }
+
 
 
 
