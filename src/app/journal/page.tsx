@@ -35,11 +35,26 @@ export default function Journal() {
         // Sync Predictions
         const res = await fetch(`/api/sync?type=predictions&t=${timestamp}`, { cache: 'no-store' });
         const json = await res.json();
-        if (json.success && json.data) {
-          setPredictions(json.data);
-          // Sync back to local if not in incognito (incognito won't save anyway)
-          const { savePredictions } = await import('@/lib/storage');
-          await savePredictions(json.data);
+        
+        if (json.success && json.data && Array.isArray(json.data) && json.data.length > 0) {
+          // Merge logic: combine local and cloud, removing duplicates by timestamp
+          setPredictions(prevLocal => {
+            const cloudPreds = json.data as SavedPrediction[];
+            const combined = [...cloudPreds];
+            
+            // Add local ones that aren't in cloud yet
+            prevLocal.forEach(p => {
+              if (!combined.find(c => c.timestamp === p.timestamp)) {
+                combined.push(p);
+              }
+            });
+            
+            const sorted = combined.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()).slice(0, 50);
+            
+            // Sync back to local
+            import('@/lib/storage').then(m => m.savePredictions(sorted));
+            return sorted;
+          });
         }
       } catch (e) { console.error("Cloud sync failed:", e); }
 
