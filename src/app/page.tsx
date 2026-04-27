@@ -179,7 +179,7 @@ export default function Home() {
       }
     });
     
-    await saveModel(tfModel.current);
+    await saveModel(tfModel.current!);
     setHasModel(true);
     
     // Dispose tensors
