@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Trophy, Calendar, Target, ChevronLeft, ArrowRight, Brain, AlertCircle } from 'lucide-react';
+import { Trophy, Calendar, Target, ChevronLeft, ArrowRight, Brain, AlertCircle, Sparkles } from 'lucide-react';
 import Link from 'next/link';
 import { loadDraws, loadPredictions, SavedPrediction } from '@/lib/storage';
 import { ProcessedDraw } from '@/lib/model';
