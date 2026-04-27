@@ -3,7 +3,25 @@ import path from 'path';
 import { LotoDraw } from './model';
 
 const dbPath = path.resolve(process.cwd(), 'loto.db');
-const db = new Database(dbPath);
+console.log("DB Path:", dbPath);
+let db: any;
+
+try {
+  db = new Database(dbPath);
+} catch (e) {
+  console.error("Failed to initialize SQLite, falling back to mock storage:", e);
+  // Mock db object to avoid crashes
+  db = {
+    exec: () => {},
+    prepare: () => ({ 
+      run: () => {}, 
+      all: () => [], 
+      get: () => null 
+    }),
+    transaction: (fn: any) => fn
+  };
+}
+
 
 // Initialize table
 db.exec(`

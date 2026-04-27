@@ -98,6 +98,12 @@ export default function Home() {
     }
 
     const { X, Y } = createDataset(data, windowLength);
+    if (X.length === 0 || Y.length === 0) {
+      console.error("Dataset empty - cannot train");
+      setIsTraining(false);
+      return;
+    }
+
     const xs = tf.tensor3d(X);
     const ys = tf.tensor2d(Y);
     const epochs = 50; // Quicker for fine-tuning
@@ -132,6 +138,8 @@ export default function Home() {
       const input = tf.tensor3d([lastTwelveRef.current!]);
       const output = tfModel.current!.predict(input) as tf.Tensor;
       output.array().then((scaledPred: any) => {
+        if (!scaledPred || !scaledPred[0]) return;
+        
         const scaler = scalerRef.current;
         const means = scaler.means.slice(0, 6);
         const stds = scaler.stds.slice(0, 6);
@@ -257,7 +265,7 @@ export default function Home() {
         {/* Performance Chart */}
         <motion.div className="md:col-span-3 glass-panel p-6 flex flex-col gap-6">
           <h3 className="font-bold text-lg flex items-center gap-2"><Activity className="w-4 h-4 text-accent" /> Loss History</h3>
-          <div className="flex-1 min-h-[200px]">
+          <div className="w-full h-64">
              <ResponsiveContainer width="100%" height="100%">
                <LineChart data={lossHistory}>
                  <Line type="monotone" dataKey="loss" stroke="#3b82f6" strokeWidth={2} dot={false} />

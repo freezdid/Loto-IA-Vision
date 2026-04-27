@@ -21,11 +21,8 @@ export async function GET() {
     const scrapedResults: any[] = [];
 
     $('table').first().find('tr').each((index, element) => {
-      const textArray = $(element)
-        .text()
-        .split('\n')
-        .map(p => p.trim())
-        .filter(p => p !== '');
+      const tds = $(element).find('td');
+      const textArray = tds.map((i, td) => $(td).text().trim()).get().filter(p => p !== '');
 
       if (textArray.length >= 8) {
         scrapedResults.push({
@@ -41,19 +38,39 @@ export async function GET() {
       }
     });
 
+
     // Save to SQLite
-    if (scrapedResults.length > 0) {
-      saveDrawsToDB(scrapedResults);
+    try {
+      if (scrapedResults.length > 0) {
+        saveDrawsToDB(scrapedResults);
+      }
+    } catch (dbError) {
+      console.error("Database save error:", dbError);
+      // Continue even if DB fails, to at least return scraped data
     }
 
     // Get full history from DB
-    const results = getAllDrawsFromDB();
+    let results = [];
+    try {
+      results = getAllDrawsFromDB();
+      if (results.length === 0 && scrapedResults.length > 0) {
+        results = scrapedResults;
+      }
+    } catch (dbError) {
+      console.error("Database read error:", dbError);
+      results = scrapedResults;
+    }
 
     return NextResponse.json({ success: true, results });
 
   } catch (error: any) {
-    console.error("Scraping error:", error);
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+    console.error("Scraping route crash:", error);
+    return NextResponse.json({ 
+      success: false, 
+      error: error.message,
+      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined 
+    }, { status: 500 });
   }
 }
+
 
