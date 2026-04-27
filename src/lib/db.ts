@@ -45,11 +45,12 @@ export function saveDrawsToDB(draws: LotoDraw[]) {
     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
   `);
 
-  const insertMany = db.transaction((items) => {
+  const insertMany = db.transaction((items: LotoDraw[]) => {
     for (const item of items) {
       insert.run(item.day, item.month_year, item.num0, item.num1, item.num2, item.num3, item.num4, item.chance);
     }
   });
+
 
   insertMany(draws);
 }
