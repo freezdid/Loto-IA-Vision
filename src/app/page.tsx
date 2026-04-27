@@ -7,6 +7,7 @@ import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'rec
 import * as tf from '@tensorflow/tfjs';
 import { processData, createDataset, buildAdvancedModel, runBacktest, ProcessedDraw } from '../lib/model';
 import { loadDraws, saveDraws, saveModel, loadModel, hasSavedModel } from '../lib/storage';
+import { calculateFrequencies, analyzeTypicality } from '../lib/stats';
 import Link from 'next/link';
 
 export default function Home() {
@@ -25,6 +26,7 @@ export default function Home() {
   const [windowLength, setWindowLength] = useState(12);
   const [numPredictions, setNumPredictions] = useState(1);
   const [predictions, setPredictions] = useState<number[][]>([]);
+  const [frequencies, setFrequencies] = useState<{ topNums: number[], topChances: number[] } | null>(null);
 
   // Keep references for tensorflow model and data
   const tfModel = useRef<tf.Sequential | null>(null);
@@ -38,6 +40,7 @@ export default function Home() {
       const savedDraws = await loadDraws();
       if (savedDraws && savedDraws.length > 0) {
         setData(savedDraws);
+        setFrequencies(calculateFrequencies(savedDraws));
         updateModelReferences(savedDraws);
       }
 
@@ -88,10 +91,11 @@ export default function Home() {
     try {
       const res = await fetch('/api/loto');
       const json = await res.json();
-      if (json.success && json.results.length > 0) {
-        const processed = processData(json.results);
-        setData(processed);
-        await saveDraws(processed);
+        if (json.success && json.results.length > 0) {
+          const processed = processData(json.results);
+          setData(processed);
+          setFrequencies(calculateFrequencies(processed));
+          await saveDraws(processed);
         updateModelReferences(processed);
         
         if (!tfModel.current) {
@@ -301,27 +305,39 @@ export default function Home() {
 
           <div className="z-10 space-y-6 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
             <AnimatePresence mode="popLayout">
-              {predictions.length > 0 ? predictions.map((pred, pIdx) => (
-                <motion.div 
-                  key={pIdx} 
-                  initial={{ opacity: 0, x: -20 }} 
-                  animate={{ opacity: 1, x: 0 }}
-                  exit={{ opacity: 0, x: 20 }}
-                  className="flex items-center gap-4 p-4 rounded-2xl bg-slate-900/40 border border-slate-800/40"
-                >
-                  <span className="text-xs font-black text-slate-600 w-8">#{pIdx + 1}</span>
-                  <div className="flex gap-2 md:gap-4 flex-wrap">
-                    {pred.map((num, i) => (
-                      <div key={i} className={`w-10 h-10 md:w-12 md:h-12 flex items-center justify-center rounded-full text-sm md:text-base font-bold ${i === 5 ? 'bg-primary/20 text-primary border border-primary/30 shadow-[0_0_15px_rgba(34,197,94,0.1)]' : 'bg-slate-800 text-white border border-slate-700'}`}>
-                        {num}
+              {predictions.length > 0 ? predictions.map((pred, pIdx) => {
+                const stats = analyzeTypicality(pred);
+                return (
+                  <motion.div 
+                    key={pIdx} 
+                    initial={{ opacity: 0, x: -20 }} 
+                    animate={{ opacity: 1, x: 0 }}
+                    className="flex flex-col md:flex-row md:items-center justify-between gap-4 p-4 rounded-2xl bg-slate-900/40 border border-white/5"
+                  >
+                    <div className="flex items-center gap-4">
+                      <span className="text-[10px] font-black text-slate-500 w-6">#{pIdx + 1}</span>
+                      <div className="flex gap-2">
+                        {pred.map((num, i) => (
+                          <div key={i} className={`number-ball ${i === 5 ? 'chance' : ''}`}>
+                            {num}
+                          </div>
+                        ))}
                       </div>
-                    ))}
-                  </div>
-                </motion.div>
-              )) : (
-                <div className="py-12 flex flex-col items-center justify-center border-2 border-dashed border-slate-800/50 rounded-3xl opacity-30">
+                    </div>
+                    <div className="flex gap-2">
+                       <span className={`px-2 py-1 rounded-lg text-[9px] font-bold uppercase tracking-tight ${stats.sumStatus === 'Optimal' ? 'bg-primary/20 text-white border border-primary/30' : 'bg-slate-800 text-slate-400'}`}>
+                         Somme {stats.sum} ({stats.sumStatus})
+                       </span>
+                       <span className={`px-2 py-1 rounded-lg text-[9px] font-bold uppercase tracking-tight ${stats.balanceStatus === 'Équilibré' ? 'bg-accent/20 text-white border border-accent/30' : 'bg-slate-800 text-slate-400'}`}>
+                         {stats.evens}P / {stats.odds}I ({stats.balanceStatus})
+                       </span>
+                    </div>
+                  </motion.div>
+                );
+              }) : (
+                <div className="py-12 flex flex-col items-center justify-center border-2 border-dashed border-white/5 rounded-3xl opacity-20">
                    <Target className="w-12 h-12 mb-4" />
-                   <p className="font-bold uppercase tracking-widest text-xs">Aucune vision calculée</p>
+                   <p className="font-bold uppercase tracking-widest text-xs text-center px-4">Prêt pour l'analyse prédictive</p>
                 </div>
               )}
             </AnimatePresence>
@@ -394,6 +410,32 @@ export default function Home() {
                  <Tooltip contentStyle={{ backgroundColor: '#020617', border: '1px solid rgba(59,130,246,0.2)', borderRadius: '12px' }} itemStyle={{ color: '#3b82f6' }} labelClassName="hidden" />
                </LineChart>
              </ResponsiveContainer>
+          </div>
+        </motion.div>
+
+        {/* Heatmap Card */}
+        <motion.div className="md:col-span-3 glass-panel p-6 flex flex-col gap-6">
+          <h3 className="font-bold text-lg flex items-center gap-2"><ListOrdered className="w-4 h-4 text-loto-yellow" /> Chaleur des Numéros</h3>
+          <p className="text-[10px] text-slate-500 uppercase font-black -mt-4">Les 10 numéros les plus fréquents</p>
+          <div className="flex flex-wrap gap-3">
+             {frequencies?.topNums.map((num, i) => (
+               <div key={i} className="flex flex-col items-center gap-1">
+                 <div className="w-10 h-10 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center font-bold text-primary">
+                    {num}
+                 </div>
+                 <span className="text-[8px] font-bold text-slate-600">RANK {i+1}</span>
+               </div>
+             ))}
+          </div>
+          <div className="pt-4 border-t border-white/5">
+             <p className="text-[10px] text-slate-500 uppercase font-black mb-3">Chances Favoris</p>
+             <div className="flex gap-4">
+                {frequencies?.topChances.map((c, i) => (
+                  <div key={i} className="w-8 h-8 rounded-full bg-loto-yellow text-slate-900 flex items-center justify-center font-black text-xs shadow-lg">
+                    {c}
+                  </div>
+                ))}
+             </div>
           </div>
         </motion.div>
 
