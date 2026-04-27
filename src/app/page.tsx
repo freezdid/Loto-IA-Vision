@@ -69,8 +69,17 @@ export default function Home() {
       if (exists) {
         try {
           const model = await loadModel();
-          tfModel.current = model as tf.Sequential;
-          setModelReady(true);
+          if (model) {
+            // Vérifier la compatibilité des features (25 attendues)
+            const inputShape = model.inputs[0].shape;
+            if (inputShape[2] === 25) {
+              tfModel.current = model;
+              setModelReady(true);
+            } else {
+              console.warn("Modèle obsolète détecté (ancienne version), un nouveau sera créé.");
+              setHasModel(false);
+            }
+          }
         } catch (e) { console.error(e); }
       }
 
@@ -428,9 +437,9 @@ export default function Home() {
         {/* Performance Chart */}
         <motion.div className="md:col-span-3 glass-panel p-6 flex flex-col gap-6">
           <h3 className="font-bold text-lg flex items-center gap-2"><Activity className="w-4 h-4 text-accent" /> Loss History</h3>
-          <div className="w-full h-64">
-             <ResponsiveContainer width="100%" height="100%">
-               <LineChart data={lossHistory}>
+          <div className="h-48 md:h-64 w-full min-h-[180px]">
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={lossHistory}>
                  <Line type="monotone" dataKey="loss" stroke="#3b82f6" strokeWidth={2} dot={false} />
                  <Tooltip contentStyle={{ backgroundColor: '#020617', border: '1px solid rgba(59,130,246,0.2)', borderRadius: '12px' }} itemStyle={{ color: '#3b82f6' }} labelClassName="hidden" />
                </LineChart>
