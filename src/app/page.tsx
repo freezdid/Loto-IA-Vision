@@ -61,16 +61,15 @@ export default function Home() {
           await saveDraws(syncJson.data);
           updateModelReferences(syncJson.data);
           setSyncStatus("Cloud");
+        } else if (syncJson.success && (!syncJson.data || syncJson.data.length === 0) && savedDraws && savedDraws.length > 0) {
+          console.log("Cloud empty, forcing push of local draws...");
+          await fetch('/api/sync', {
+            method: 'POST',
+            body: JSON.stringify({ data: savedDraws, type: 'draws' })
+          });
+          setSyncStatus("Cloud (Migrated)");
         } else {
-          setSyncStatus(syncJson.success ? "Cloud Synced" : "Local Only");
-          // PUSH LOCAL TO CLOUD if cloud is empty but local has data
-          if (syncJson.success && (!syncJson.data || syncJson.data.length === 0) && savedDraws && savedDraws.length > 0) {
-            console.log("Cloud empty, pushing local draws...");
-            await fetch('/api/sync', {
-              method: 'POST',
-              body: JSON.stringify({ data: savedDraws, type: 'draws' })
-            });
-          }
+          setSyncStatus("Cloud Synced");
         }
       } catch (e) { 
         console.error("Sync failed:", e);
@@ -84,12 +83,12 @@ export default function Home() {
       try {
         const predSync = await fetch('/api/sync?type=predictions');
         const predJson = await predSync.json();
-        if (predJson.success && predJson.data) {
+        if (predJson.success && predJson.data && predJson.data.length > 0) {
           setPredictionHistory(predJson.data);
           await savePredictions(predJson.data);
         } else if (predJson.success && (!predJson.data || predJson.data.length === 0) && savedPreds && savedPreds.length > 0) {
           // Cloud predictions empty, push local
-          console.log("Cloud predictions empty, pushing local...");
+          console.log("Cloud predictions empty, forcing push...");
           await fetch('/api/sync', {
             method: 'POST',
             body: JSON.stringify({ data: savedPreds, type: 'predictions' })

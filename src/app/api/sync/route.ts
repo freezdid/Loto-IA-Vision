@@ -10,7 +10,7 @@ export async function GET(req: Request) {
     if (type === 'model') path = 'loto_model_meta.json';
     
     const data = await loadFromBlob(path);
-    return NextResponse.json({ success: true, data });
+    return NextResponse.json({ success: true, data: data || [] });
   } catch (error: any) {
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }

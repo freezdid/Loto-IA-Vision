@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Trophy, Calendar, Target, ChevronLeft, ArrowRight, Brain, AlertCircle, Sparkles } from 'lucide-react';
+import { Trophy, Calendar, Target, ChevronLeft, ArrowRight, Brain, AlertCircle, Sparkles, RefreshCw } from 'lucide-react';
 import Link from 'next/link';
 import { loadDraws, loadPredictions, SavedPrediction } from '@/lib/storage';
 import { ProcessedDraw } from '@/lib/model';
@@ -96,16 +96,25 @@ export default function Journal() {
     <main className="min-h-screen bg-slate-950 text-slate-200 p-4 md:p-8">
       <div className="max-w-4xl mx-auto space-y-8">
         {/* Header */}
-        <div className="flex items-center justify-between">
-          <Link href="/" className="flex items-center gap-2 text-slate-400 hover:text-white transition-colors">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <Link href="/" className="flex items-center gap-2 text-slate-400 hover:text-white transition-colors order-2 md:order-1">
             <ChevronLeft className="w-5 h-5" />
             <span>Retour Dashboard</span>
           </Link>
-          <div className="text-right">
-            <h1 className="text-2xl font-black italic tracking-tighter text-white flex items-center gap-2">
-               <Brain className="w-6 h-6 text-accent" /> IA JOURNAL
-            </h1>
-            <p className="text-[10px] text-slate-500 font-bold uppercase">Suivi des performances prédictives</p>
+          <div className="flex items-center gap-4 order-1 md:order-2">
+            <button 
+              onClick={() => window.location.reload()}
+              className="p-2 rounded-full bg-slate-900 border border-white/5 text-slate-400 hover:text-accent transition-colors"
+              title="Rafraîchir les données"
+            >
+              <RefreshCw className="w-5 h-5" />
+            </button>
+            <div className="text-right">
+              <h1 className="text-2xl font-black italic tracking-tighter text-white flex items-center gap-2">
+                 <Brain className="w-6 h-6 text-accent" /> IA JOURNAL
+              </h1>
+              <p className="text-[10px] text-slate-500 font-bold uppercase">Suivi des performances prédictives</p>
+            </div>
           </div>
         </div>
 
