@@ -451,7 +451,7 @@ export default function Home() {
             </AnimatePresence>
           </div>
 
-          <button onClick={handlePredict} disabled={!modelReady || isTraining || isOptimizing} className="btn-accent w-full md:w-fit z-10 mt-auto">
+          <button onClick={() => handlePredict(false)} disabled={!modelReady || isTraining || isOptimizing} className="btn-accent w-full md:w-fit z-10 mt-auto">
             {isOptimizing ? <RefreshCw className="w-5 h-5 animate-spin" /> : <ChevronRight className="w-5 h-5" />}
             {isOptimizing ? "Optimisation GTO..." : "Lancer les Calculs"}
           </button>
