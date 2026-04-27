@@ -2,18 +2,27 @@ import { ProcessedDraw } from './model';
 import * as tf from '@tensorflow/tfjs';
 
 const DB_NAME = 'LotoIAVisionDB';
-const DB_VERSION = 1;
+const DB_VERSION = 2; // Incremented for predictions store
 const DRAWS_STORE = 'draws';
+const PREDICTIONS_STORE = 'predictions';
 const METADATA_STORE = 'metadata';
+
+export interface SavedPrediction {
+  timestamp: string;
+  grilles: number[][];
+}
 
 export async function initDB() {
   return new Promise<IDBDatabase>((resolve, reject) => {
     const request = indexedDB.open(DB_NAME, DB_VERSION);
 
-    request.onupgradeneeded = () => {
+    request.onupgradeneeded = (event: any) => {
       const db = request.result;
       if (!db.objectStoreNames.contains(DRAWS_STORE)) {
         db.createObjectStore(DRAWS_STORE);
+      }
+      if (!db.objectStoreNames.contains(PREDICTIONS_STORE)) {
+        db.createObjectStore(PREDICTIONS_STORE);
       }
       if (!db.objectStoreNames.contains(METADATA_STORE)) {
         db.createObjectStore(METADATA_STORE);
@@ -37,6 +46,23 @@ export async function loadDraws(): Promise<ProcessedDraw[] | null> {
   const db = await initDB();
   return new Promise((resolve) => {
     const request = db.transaction(DRAWS_STORE).objectStore(DRAWS_STORE).get('all_draws');
+    request.onsuccess = () => resolve(request.result || null);
+    request.onerror = () => resolve(null);
+  });
+}
+
+export async function savePredictions(preds: SavedPrediction[]) {
+  const db = await initDB();
+  const tx = db.transaction(PREDICTIONS_STORE, 'readwrite');
+  const store = tx.objectStore(PREDICTIONS_STORE);
+  store.put(preds, 'history');
+  return new Promise((resolve) => (tx.oncomplete = resolve));
+}
+
+export async function loadPredictions(): Promise<SavedPrediction[] | null> {
+  const db = await initDB();
+  return new Promise((resolve) => {
+    const request = db.transaction(PREDICTIONS_STORE).objectStore(PREDICTIONS_STORE).get('history');
     request.onsuccess = () => resolve(request.result || null);
     request.onerror = () => resolve(null);
   });

@@ -6,8 +6,8 @@ import { Activity, Database, Play, Sparkles, RefreshCw, ChevronRight, Trophy, Ta
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 import * as tf from '@tensorflow/tfjs';
 import { processData, createDataset, buildAdvancedModel, runBacktest, ProcessedDraw } from '../lib/model';
-import { loadDraws, saveDraws, saveModel, loadModel, hasSavedModel } from '../lib/storage';
 import { calculateFrequencies, analyzeTypicality } from '../lib/stats';
+import { loadPredictions, savePredictions, SavedPrediction } from '../lib/storage';
 import Link from 'next/link';
 
 export default function Home() {
@@ -29,6 +29,7 @@ export default function Home() {
   const [numPredictions, setNumPredictions] = useState(1);
   const [predictions, setPredictions] = useState<number[][]>([]);
   const [frequencies, setFrequencies] = useState<{ topNums: number[], topChances: number[] } | null>(null);
+  const [predictionHistory, setPredictionHistory] = useState<SavedPrediction[]>([]);
 
   // Keep references for tensorflow model and data
   const tfModel = useRef<tf.LayersModel | null>(null);
@@ -64,6 +65,19 @@ export default function Home() {
         console.error("Sync failed:", e);
         setSyncStatus("Local Only");
       }
+
+      // 3. Load Predictions History
+      const savedPreds = await loadPredictions();
+      if (savedPreds) setPredictionHistory(savedPreds);
+      
+      try {
+        const predSync = await fetch('/api/sync?type=predictions');
+        const predJson = await predSync.json();
+        if (predJson.success && predJson.data) {
+          setPredictionHistory(predJson.data);
+          await savePredictions(predJson.data);
+        }
+      } catch (e) { console.error("Pred sync failed:", e); }
       
       const exists = await hasSavedModel();
       setHasModel(exists);
@@ -187,10 +201,13 @@ export default function Home() {
     ys.dispose();
     
     setIsTraining(false);
+
+    // Auto-predict and save after training
+    await handlePredict(true);
   };
 
 
-  const handlePredict = async () => {
+  const handlePredict = async (autoSave: boolean = false) => {
     if (!tfModel.current || !lastTwelveRef.current || !scalerRef.current) return;
     setIsOptimizing(true);
     
@@ -249,6 +266,24 @@ export default function Home() {
 
     setPredictions(topGrilles);
     setIsOptimizing(false);
+
+    if (autoSave || topGrilles.length > 0) {
+      const newSaved: SavedPrediction = {
+        timestamp: new Date().toISOString(),
+        grilles: topGrilles
+      };
+      const updatedHistory = [newSaved, ...predictionHistory].slice(0, 50);
+      setPredictionHistory(updatedHistory);
+      await savePredictions(updatedHistory);
+      
+      // Sync to Cloud
+      try {
+        await fetch('/api/sync', {
+          method: 'POST',
+          body: JSON.stringify({ data: updatedHistory, type: 'predictions' })
+        });
+      } catch (e) { console.error("Cloud pred push failed:", e); }
+    }
   };
 
   const handleExport = () => {
