@@ -7,7 +7,7 @@ import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'rec
 import * as tf from '@tensorflow/tfjs';
 import { processData, createDataset, buildAdvancedModel, runBacktest, ProcessedDraw } from '../lib/model';
 import { calculateFrequencies, analyzeTypicality } from '../lib/stats';
-import { loadPredictions, savePredictions, SavedPrediction } from '../lib/storage';
+import { loadDraws, saveDraws, saveModel, loadModel, hasSavedModel, loadPredictions, savePredictions, SavedPrediction } from '../lib/storage';
 import Link from 'next/link';
 
 export default function Home() {
