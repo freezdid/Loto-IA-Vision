@@ -123,26 +123,36 @@ export default function Home() {
       const json = await res.json();
         if (json.success && json.results.length > 0) {
           const processed = processData(json.results);
+          
+          // Check if we actually have NEW data compared to current state
+          const isNewData = processed.length > data.length;
+          
           setData(processed);
           setFrequencies(calculateFrequencies(processed));
           await saveDraws(processed);
-        updateModelReferences(processed);
+          updateModelReferences(processed);
         
-        if (!tfModel.current) {
-          tfModel.current = buildAdvancedModel(windowLength, 25, 6);
-          setModelReady(true);
-        }
-        setScrapeStatus("Données à jour");
+          if (!tfModel.current) {
+            tfModel.current = buildAdvancedModel(windowLength, 25, 6);
+            setModelReady(true);
+          }
+          setScrapeStatus(isNewData ? "Nouveaux tirages détectés !" : "Données à jour");
 
-        // Push to Cloud
-        try {
-          await fetch('/api/sync', {
-            method: 'POST',
-            body: JSON.stringify({ data: processed })
-          });
-          setSyncStatus("Cloud Updated");
-        } catch (e) { console.error("Cloud push failed:", e); }
-      }
+          // Push to Cloud
+          try {
+            await fetch('/api/sync', {
+              method: 'POST',
+              body: JSON.stringify({ data: processed })
+            });
+            setSyncStatus("Cloud Updated");
+          } catch (e) { console.error("Cloud push failed:", e); }
+
+          // AUTO-TRAIN if new data
+          if (isNewData && data.length > 0) {
+            console.log("Auto-training starting due to new data...");
+            handleTrain();
+          }
+        }
 
     } catch (e) {
       console.error(e);

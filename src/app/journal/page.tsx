@@ -109,57 +109,79 @@ export default function Journal() {
                         <Calendar className="w-4 h-4" />
                         <span className="text-xs font-bold">{new Date(pred.timestamp).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</span>
                       </div>
-                      <h3 className="text-lg font-bold">Pronostic #{predictions.length - idx}</h3>
-                      <div className="flex gap-1 mt-2">
+                      <h3 className="text-xl font-black italic text-white tracking-tighter uppercase">Pronostic #{predictions.length - idx}</h3>
+                      <div className="flex flex-wrap gap-2 mt-4">
                         {pred.grilles[0].map((num, i) => (
-                          <div key={i} className={`w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold ${i === 5 ? 'bg-loto-red' : 'bg-slate-800'}`}>
-                            {num}
+                          <div key={i} className="flex flex-col items-center gap-1">
+                            <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm shadow-lg ${
+                              i === 5 
+                                ? 'bg-loto-red text-white border-2 border-white/20' 
+                                : 'bg-primary/10 border border-primary/30 text-primary shadow-primary/5'
+                            }`}>
+                              {num < 10 ? `0${num}` : num}
+                            </div>
+                            <span className="text-[7px] font-black text-slate-600 uppercase">{i === 5 ? 'Chance' : `N°${i+1}`}</span>
                           </div>
                         ))}
                       </div>
                       {pred.grilles.length > 1 && (
-                        <p className="text-[10px] text-slate-500 italic mt-1">+ {pred.grilles.length - 1} autres combinaisons calculées</p>
+                        <div className="flex items-center gap-2 mt-4 px-3 py-1 bg-slate-900/50 rounded-full border border-white/5 w-fit">
+                           <Sparkles className="w-3 h-3 text-loto-yellow" />
+                           <p className="text-[9px] text-slate-400 font-bold uppercase italic">+ {pred.grilles.length - 1} combinaisons optimisées</p>
+                        </div>
                       )}
                     </div>
 
-                    <div className="flex items-center gap-4 bg-slate-900/50 p-4 rounded-2xl border border-white/5">
-                      <ArrowRight className="w-5 h-5 text-slate-600 hidden md:block" />
+                    <div className="flex items-center gap-6 bg-slate-900/80 p-5 rounded-3xl border border-white/5 shadow-2xl relative overflow-hidden group">
+                      <div className="absolute inset-0 bg-gradient-to-br from-accent/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+                      
+                      <div className="hidden md:block">
+                        <div className="w-10 h-10 rounded-full bg-slate-800 flex items-center justify-center">
+                           <ArrowRight className="w-5 h-5 text-slate-500" />
+                        </div>
+                      </div>
+
                       {result ? (
-                        <div className="space-y-2">
+                        <div className="space-y-4 relative z-10">
                           <div className="flex items-center gap-2">
-                            <span className="text-[10px] font-black uppercase text-loto-yellow">Résultat Tirage du {new Date(result.draw.fullDate).toLocaleDateString()}</span>
+                            <div className="w-2 h-2 rounded-full bg-loto-yellow animate-pulse" />
+                            <span className="text-[10px] font-black uppercase tracking-widest text-loto-yellow/80">Tirage du {new Date(result.draw.fullDate).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })}</span>
                           </div>
-                          <div className="flex items-center gap-4">
+                          
+                          <div className="flex items-center gap-6">
                             <div className="flex flex-col items-center">
-                              <span className="text-2xl font-black text-white">{result.bestScore.nums}</span>
-                              <span className="text-[8px] font-bold text-slate-500 uppercase">Numéros</span>
+                              <span className="text-4xl font-black text-white leading-none">{result.bestScore.nums}</span>
+                              <span className="text-[9px] font-black text-slate-500 uppercase tracking-tighter mt-1">Numéros</span>
                             </div>
-                            <div className={`w-px h-8 ${result.bestScore.chance ? 'bg-loto-red' : 'bg-slate-800'}`} />
+                            
                             <div className="flex flex-col items-center">
-                              <span className={`text-2xl font-black ${result.bestScore.chance ? 'text-loto-red' : 'text-slate-700'}`}>
+                              <div className={`text-4xl font-black leading-none ${result.bestScore.chance ? 'text-loto-red' : 'text-slate-800'}`}>
                                 {result.bestScore.chance ? 'OK' : '-'}
-                              </span>
-                              <span className="text-[8px] font-bold text-slate-500 uppercase">Chance</span>
+                              </div>
+                              <span className="text-[9px] font-black text-slate-500 uppercase tracking-tighter mt-1">Chance</span>
                             </div>
-                            <div className="ml-4">
-                               {result.bestScore.nums >= 3 ? (
-                                 <div className="bg-loto-yellow text-slate-950 px-3 py-1 rounded-full text-[10px] font-black animate-bounce">
-                                    GAGNANT
+
+                            <div className="ml-2">
+                               {result.bestScore.nums >= 2 || result.bestScore.chance ? (
+                                 <div className="bg-gradient-to-r from-loto-yellow to-yellow-500 text-slate-950 px-4 py-1.5 rounded-full text-[10px] font-black shadow-lg shadow-loto-yellow/20 animate-bounce uppercase">
+                                    Gagnant
                                  </div>
                                ) : (
-                                 <div className="text-slate-600 text-[10px] font-bold uppercase tracking-widest">
-                                    En attente
+                                 <div className="px-4 py-1.5 rounded-full border border-slate-800 text-slate-600 text-[10px] font-black uppercase tracking-widest">
+                                    Perdu
                                  </div>
                                )}
                             </div>
                           </div>
                         </div>
                       ) : (
-                        <div className="flex items-center gap-3">
-                           <Target className="w-8 h-8 text-slate-800" />
+                        <div className="flex items-center gap-4 py-2 relative z-10">
+                           <div className="w-12 h-12 rounded-full border-2 border-slate-800 border-t-accent animate-spin flex items-center justify-center">
+                              <Target className="w-5 h-5 text-slate-700" />
+                           </div>
                            <div>
-                             <p className="text-xs font-bold text-slate-400">En attente du prochain tirage...</p>
-                             <p className="text-[9px] text-slate-600 uppercase font-black italic">Analyse en suspens</p>
+                             <p className="text-xs font-black text-white uppercase tracking-tighter">Analyse en attente</p>
+                             <p className="text-[9px] text-slate-500 uppercase font-bold">Prochain tirage requis</p>
                            </div>
                         </div>
                       )}
