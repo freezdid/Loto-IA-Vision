@@ -301,7 +301,7 @@ export default function Home() {
   const handleSimulate = () => {
     if (!data.length) return;
     const { topNums, topChances } = calculateFrequencies(data);
-    const stats = analyzeTypicality(simNumbers.slice(0, 5), simNumbers[5]);
+    const stats = analyzeTypicality(simNumbers);
     
     // Simple scoring logic
     let score = 0;
@@ -310,8 +310,8 @@ export default function Home() {
     if (topChances.includes(simNumbers[5])) score += 15;
     
     // 2. Typicality
-    if (stats.isTypicalSum) score += 20;
-    if (stats.isTypicalParity) score += 15;
+    if (stats.sumStatus === 'Optimal') score += 20;
+    if (stats.balanceStatus === 'Équilibré') score += 15;
     
     // 3. Spacing
     const sorted = [...simNumbers.slice(0, 5)].sort((a, b) => a - b);
