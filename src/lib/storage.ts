@@ -45,7 +45,7 @@ export async function loadDraws(): Promise<ProcessedDraw[] | null> {
 // Model persistence using TensorFlow.js built-in IndexedDB support
 const MODEL_PATH = `indexeddb://${DB_NAME}-model`;
 
-export async function saveModel(model: tf.Sequential) {
+export async function saveModel(model: tf.LayersModel) {
   await model.save(MODEL_PATH);
 }
 
