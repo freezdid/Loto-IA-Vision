@@ -7,7 +7,7 @@ import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'rec
 import * as tf from '@tensorflow/tfjs';
 import { processData, createDataset, buildAdvancedModel, runBacktest, ProcessedDraw } from '../lib/model';
 import { calculateFrequencies, analyzeTypicality } from '../lib/stats';
-import { loadDraws, saveDraws, saveModel, loadModel, hasSavedModel, loadPredictions, savePredictions, SavedPrediction, exportModel } from '../lib/storage';
+import { loadDraws, saveDraws, saveModel, loadModel, hasSavedModel, loadPredictions, savePredictions, SavedPrediction, exportModel, saveLastPrediction, loadLastPrediction } from '../lib/storage';
 import Link from 'next/link';
 
 export default function Home() {
@@ -80,6 +80,9 @@ export default function Home() {
       const savedPreds = await loadPredictions();
       if (savedPreds) setPredictionHistory(savedPreds);
       
+      const lastActive = await loadLastPrediction();
+      if (lastActive) setPredictions(lastActive);
+
       try {
         const predSync = await fetch('/api/sync?type=predictions', { cache: 'no-store' });
         const predJson = await predSync.json();
@@ -309,24 +312,31 @@ export default function Home() {
         grilles: topGrilles
       };
       
-      // We use a functional-style update logic but applied immediately for persistence
-      setPredictionHistory(prev => {
-        const updated = [newSaved, ...prev].slice(0, 50);
-        
-        // PERSISTENCE (Triggered from within state update to ensure 'updated' is fresh)
-        savePredictions(updated);
-        fetch('/api/sync', {
+      // 1. Calculate new history
+      const updatedHistory = [newSaved, ...predictionHistory].slice(0, 50);
+      
+      // 2. State updates (immediate UI feedback)
+      setPredictions(topGrilles);
+      setPredictionHistory(updatedHistory);
+      
+      // 3. PERSISTENCE (Blocking and robust)
+      setSyncStatus("Saving...");
+      try {
+        // Save current active balls
+        await saveLastPrediction(topGrilles);
+        // Save history to local
+        await savePredictions(updatedHistory);
+        // Save to cloud
+        await fetch(`/api/sync?type=predictions&t=${Date.now()}`, {
           method: 'POST',
           headers: { 'Cache-Control': 'no-cache' },
-          body: JSON.stringify({ data: updated, type: 'predictions' })
-        }).then(() => {
-           console.log("Cloud Push Success");
-        }).catch(e => console.error("Cloud sync failed:", e));
-
-        return updated;
-      });
-
-      setSyncStatus("Cloud Updated");
+          body: JSON.stringify({ data: updatedHistory, type: 'predictions' })
+        });
+        setSyncStatus("Cloud Synced");
+      } catch (e) { 
+        console.error("Critical Save Error:", e);
+        setSyncStatus("Error Saving");
+      }
     }
   };
 

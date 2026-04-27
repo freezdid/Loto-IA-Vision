@@ -68,6 +68,23 @@ export async function loadPredictions(): Promise<SavedPrediction[] | null> {
   });
 }
 
+// Persist the current active prediction shown on dashboard
+export async function saveLastPrediction(preds: number[][]) {
+  const db = await initDB();
+  const tx = db.transaction(PREDICTIONS_STORE, 'readwrite');
+  tx.objectStore(PREDICTIONS_STORE).put(preds, 'last_active');
+  return new Promise((resolve) => (tx.oncomplete = resolve));
+}
+
+export async function loadLastPrediction(): Promise<number[][] | null> {
+  const db = await initDB();
+  return new Promise((resolve) => {
+    const request = db.transaction(PREDICTIONS_STORE).objectStore(PREDICTIONS_STORE).get('last_active');
+    request.onsuccess = () => resolve(request.result || null);
+    request.onerror = () => resolve(null);
+  });
+}
+
 // Model persistence using TensorFlow.js built-in IndexedDB support
 const MODEL_PATH = `indexeddb://${DB_NAME}-model`;
 
