@@ -88,33 +88,34 @@ export default function HistoryPage() {
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: Math.min(idx * 0.02, 1) }}
-              className="glass-panel p-5 space-y-4 hover:border-primary/30 transition-colors group"
+              className="glass-panel p-5 space-y-4 hover:border-primary/50 transition-colors group"
             >
               <div className="flex justify-between items-start">
                 <div>
-                  <p className="text-[10px] font-black text-primary uppercase tracking-widest">{draw.day}</p>
+                  <p className="text-[10px] font-black text-accent uppercase tracking-widest leading-none mb-1">{draw.day}</p>
                   <p className="text-sm font-bold text-slate-300">{draw.month_year}</p>
                 </div>
                 <div className="opacity-0 group-hover:opacity-100 transition-opacity">
-                  <Filter className="w-3 h-3 text-slate-600" />
+                  <Calendar className="w-3 h-3 text-slate-600" />
                 </div>
               </div>
 
-              <div className="flex gap-2 justify-between">
+              <div className="flex gap-2 justify-between items-center">
                 <div className="flex gap-1.5">
                   {[draw.num0, draw.num1, draw.num2, draw.num3, draw.num4].map((n, i) => (
-                    <div key={i} className="w-8 h-8 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center text-xs font-bold text-white shadow-lg">
+                    <div key={i} className="number-ball !w-8 !h-8 !text-xs !border">
                       {n}
                     </div>
                   ))}
                 </div>
-                <div className="w-8 h-8 rounded-full bg-primary/20 border border-primary/40 flex items-center justify-center text-xs font-black text-primary shadow-[0_0_15px_rgba(34,197,94,0.2)]">
+                <div className="number-ball chance !w-8 !h-8 !text-xs !border">
                   {draw.chance}
                 </div>
               </div>
             </motion.div>
           ))}
         </div>
+
       )}
     </main>
   );
