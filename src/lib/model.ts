@@ -223,11 +223,13 @@ export async function runBacktest(data: ProcessedDraw[], windowLength: number, t
     batchSize: 32, 
     shuffle: true,
     callbacks: {
-      onEpochEnd: (epoch) => {
+      onEpochEnd: async (epoch) => {
         if (onProgress) onProgress(Math.round(((epoch + 1) / epochs) * 100));
+        await tf.nextFrame(); // Permet à l'UI de respirer et d'éviter le message "Page ne répond pas"
       }
     }
   });
+
   
   // Predict
   const xTestTensor = tf.tensor3d(XTest);

@@ -441,29 +441,60 @@ export default function Home() {
         </motion.div>
 
         {/* Quick Backtest */}
-        <motion.div className="md:col-span-3 glass-panel p-6 flex flex-col justify-between">
-          <div className="space-y-4">
+        <motion.div className="md:col-span-3 glass-panel p-6 flex flex-col justify-between overflow-hidden relative">
+          <div className="space-y-4 z-10">
             <h3 className="text-xl font-bold flex items-center gap-2"><Trophy className="w-6 h-6 text-yellow-500" /> Validation</h3>
-            <div className="grid grid-cols-3 gap-3">
-              <div className="p-3 rounded-xl bg-slate-900/80 border border-slate-800/80 text-center">
-                <span className="text-[10px] uppercase font-bold text-slate-500 block">Win Rate</span>
-                <span className="text-lg font-black text-primary">{backtestStats?.winRate || '0'}%</span>
-              </div>
-              <div className="p-3 rounded-xl bg-slate-900/80 border border-slate-800/80 text-center">
-                <span className="text-[10px] uppercase font-bold text-slate-500 block">Avg Numeros</span>
-                <span className="text-lg font-black text-white">{backtestStats?.avgBonsNumeros || '0'}</span>
-              </div>
-              <div className="p-3 rounded-xl bg-slate-900/80 border border-slate-800/80 text-center">
-                <span className="text-[10px] uppercase font-bold text-slate-500 block">Sample</span>
-                <span className="text-lg font-black text-white">{backtestStats?.testSize || '0'}</span>
-              </div>
-            </div>
+            
+            <AnimatePresence mode="wait">
+              {isBacktesting ? (
+                <motion.div 
+                  initial={{ opacity: 0, y: 10 }} 
+                  animate={{ opacity: 1, y: 0 }} 
+                  exit={{ opacity: 0, y: -10 }}
+                  className="space-y-4 py-4"
+                >
+                  <div className="flex justify-between items-end mb-1">
+                    <span className="text-[10px] font-black text-primary uppercase">Calcul en cours...</span>
+                    <span className="text-xl font-black text-white">{progress}%</span>
+                  </div>
+                  <div className="h-2 w-full bg-slate-800 rounded-full overflow-hidden">
+                    <motion.div 
+                      className="h-full bg-primary"
+                      initial={{ width: 0 }}
+                      animate={{ width: `${progress}%` }}
+                    />
+                  </div>
+                  <p className="text-[10px] text-slate-500 italic">L'IA simule 50 tirages passés pour valider sa précision...</p>
+                </motion.div>
+              ) : (
+                <motion.div 
+                  initial={{ opacity: 0 }} 
+                  animate={{ opacity: 1 }}
+                  className="grid grid-cols-3 gap-3"
+                >
+                  <div className="p-3 rounded-xl bg-slate-900/80 border border-white/5 text-center">
+                    <span className="text-[10px] uppercase font-bold text-slate-500 block">Win Rate</span>
+                    <span className="text-lg font-black text-primary">{backtestStats?.winRate || '0'}%</span>
+                  </div>
+                  <div className="p-3 rounded-xl bg-slate-900/80 border border-white/5 text-center">
+                    <span className="text-[10px] uppercase font-bold text-slate-500 block">Avg Numeros</span>
+                    <span className="text-lg font-black text-white">{backtestStats?.avgBonsNumeros || '0'}</span>
+                  </div>
+                  <div className="p-3 rounded-xl bg-slate-900/80 border border-white/5 text-center">
+                    <span className="text-[10px] uppercase font-bold text-slate-500 block">Sample</span>
+                    <span className="text-lg font-black text-white">{backtestStats?.testSize || '0'}</span>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
-          <button onClick={handleBacktest} disabled={isBacktesting || data.length === 0} className="btn-ghost w-full mt-4">
+          
+          <button onClick={handleBacktest} disabled={isBacktesting || data.length === 0} className="btn-ghost w-full mt-4 z-10 relative">
             {isBacktesting ? <RefreshCw className="w-4 h-4 animate-spin mr-2" /> : <Play className="w-4 h-4 mr-2" />}
-            Lancer Test
+            {isBacktesting ? "Analyse..." : "Lancer Test de Précision"}
           </button>
         </motion.div>
+
 
       </div>
 
