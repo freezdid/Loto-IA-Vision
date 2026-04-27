@@ -63,6 +63,14 @@ export default function Home() {
           setSyncStatus("Cloud");
         } else {
           setSyncStatus(syncJson.success ? "Cloud Synced" : "Local Only");
+          // PUSH LOCAL TO CLOUD if cloud is empty but local has data
+          if (syncJson.success && (!syncJson.data || syncJson.data.length === 0) && savedDraws && savedDraws.length > 0) {
+            console.log("Cloud empty, pushing local draws...");
+            await fetch('/api/sync', {
+              method: 'POST',
+              body: JSON.stringify({ data: savedDraws, type: 'draws' })
+            });
+          }
         }
       } catch (e) { 
         console.error("Sync failed:", e);
@@ -79,6 +87,13 @@ export default function Home() {
         if (predJson.success && predJson.data) {
           setPredictionHistory(predJson.data);
           await savePredictions(predJson.data);
+        } else if (predJson.success && (!predJson.data || predJson.data.length === 0) && savedPreds && savedPreds.length > 0) {
+          // Cloud predictions empty, push local
+          console.log("Cloud predictions empty, pushing local...");
+          await fetch('/api/sync', {
+            method: 'POST',
+            body: JSON.stringify({ data: savedPreds, type: 'predictions' })
+          });
         }
       } catch (e) { console.error("Pred sync failed:", e); }
       

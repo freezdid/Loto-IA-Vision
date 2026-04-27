@@ -22,11 +22,21 @@ export default function Journal() {
 
       // 2. Load Cloud
       try {
+        // Sync Draws first (needed for matching)
+        if (!draws || draws.length === 0) {
+          const resDraws = await fetch('/api/sync?type=draws');
+          const jsonDraws = await resDraws.json();
+          if (jsonDraws.success && jsonDraws.data) {
+            setData(jsonDraws.data);
+          }
+        }
+
+        // Sync Predictions
         const res = await fetch('/api/sync?type=predictions');
         const json = await res.json();
         if (json.success && json.data) {
           setPredictions(json.data);
-          // Sync back to local
+          // Sync back to local if not in incognito (incognito won't save anyway)
           const { savePredictions } = await import('@/lib/storage');
           await savePredictions(json.data);
         }
