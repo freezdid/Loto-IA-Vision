@@ -18,6 +18,7 @@ export default function Home() {
   const [scrapeStatus, setScrapeStatus] = useState("");
   const [syncStatus, setSyncStatus] = useState("Local");
   const [isOptimizing, setIsOptimizing] = useState(false);
+  const [isInitialLoading, setIsInitialLoading] = useState(true);
 
   const [lossHistory, setLossHistory] = useState<{ epoch: number; loss: number }[]>([]);
   const [hasModel, setHasModel] = useState(false);
@@ -84,7 +85,8 @@ export default function Home() {
       }
 
       // 3. Auto-update from server (Scraping)
-      handleScrape();
+      await handleScrape();
+      setIsInitialLoading(false);
     }
 
     init();
@@ -280,7 +282,35 @@ export default function Home() {
 
 
   return (
-    <main className="min-h-screen p-6 md:p-12 lg:p-16 flex flex-col gap-12">
+    <main className="min-h-screen p-6 md:p-12 lg:p-16 flex flex-col gap-12 relative">
+      <AnimatePresence>
+        {isInitialLoading && (
+          <motion.div 
+            initial={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[100] bg-background flex flex-col items-center justify-center p-6 text-center"
+          >
+            <div className="relative mb-8">
+              <motion.div 
+                animate={{ rotate: 360 }}
+                transition={{ duration: 4, repeat: Infinity, ease: "linear" }}
+                className="w-24 h-24 rounded-full border-2 border-primary/20 border-t-primary shadow-[0_0_30px_rgba(0,85,164,0.2)]"
+              />
+              <div className="absolute inset-0 flex items-center justify-center">
+                <Brain className="w-8 h-8 text-primary animate-pulse" />
+              </div>
+            </div>
+            <h2 className="text-2xl font-black tracking-tighter mb-2">INITIALISATION <span className="text-primary">IA</span> VISION</h2>
+            <p className="text-slate-500 font-medium max-w-xs">{scrapeStatus || "Synchronisation des données en cours..."}</p>
+            <div className="mt-8 flex gap-1">
+               {[0,1,2].map(i => (
+                 <motion.div key={i} animate={{ scale: [1, 1.5, 1] }} transition={{ duration: 1, repeat: Infinity, delay: i * 0.2 }} className="w-1.5 h-1.5 rounded-full bg-primary" />
+               ))}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Header Section */}
       <header className="flex flex-col md:flex-row justify-between items-end gap-6">
         <div className="space-y-4">

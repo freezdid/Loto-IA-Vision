@@ -41,24 +41,22 @@ function countImpairs(nums: number[]) { return nums.filter(n => impairs.has(n)).
 function countUnder(nums: number[], val: number) { return nums.filter(n => n <= val).length; }
 
 export function processData(draws: LotoDraw[]): ProcessedDraw[] {
-  // Invert the data so the oldest is first, just like Python code: df = df_tirage.iloc[::-1]
   const reversed = [...draws].reverse();
   
-  // To compute frequency correctly as per python: "tab[0:pos].count(e)" -> count of occurrences of e up to current position
-  const getFreq = (index: number, key: keyof LotoDraw, val: number) => {
-    let count = 0;
-    for (let i = 0; i <= index; i++) {
-      if (reversed[i][key] === val) count++;
-    }
-    return count;
-  };
-
+  const freqMap: Record<string, number> = {};
   const lastSeenMap: Record<number, number> = {};
   const lastSeenChanceMap: Record<number, number> = {};
 
   return reversed.map((d, i) => {
     const nums = [d.num0, d.num1, d.num2, d.num3, d.num4];
     
+    // Update Frequencies (O(1) lookup instead of O(N) loop)
+    const updateFreq = (key: string, val: number) => {
+      const compositeKey = `${key}_${val}`;
+      freqMap[compositeKey] = (freqMap[compositeKey] || 0) + 1;
+      return freqMap[compositeKey];
+    };
+
     // Calculer last_seen
     const lastSeen = nums.map(n => {
       const dist = lastSeenMap[n] !== undefined ? i - lastSeenMap[n] : i;
@@ -70,12 +68,12 @@ export function processData(draws: LotoDraw[]): ProcessedDraw[] {
 
     return {
       ...d,
-      freq_num0: getFreq(i, 'num0', d.num0),
-      freq_num1: getFreq(i, 'num1', d.num1),
-      freq_num2: getFreq(i, 'num2', d.num2),
-      freq_num3: getFreq(i, 'num3', d.num3),
-      freq_num4: getFreq(i, 'num4', d.num4),
-      freq_chance: getFreq(i, 'chance', d.chance),
+      freq_num0: updateFreq('num0', d.num0),
+      freq_num1: updateFreq('num1', d.num1),
+      freq_num2: updateFreq('num2', d.num2),
+      freq_num3: updateFreq('num3', d.num3),
+      freq_num4: updateFreq('num4', d.num4),
+      freq_chance: updateFreq('chance', d.chance),
       sum_diff: Math.pow(d.num1 - d.num0, 2) + Math.pow(d.num2 - d.num1, 2) + Math.pow(d.num3 - d.num2, 2) + Math.pow(d.num4 - d.num3, 2),
       pair_chance: pairs.has(d.chance) ? 1 : 0,
       impair_chance: impairs.has(d.chance) ? 1 : 0,
