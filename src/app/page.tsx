@@ -218,13 +218,22 @@ export default function Home() {
     const scaler = scalerRef.current;
     const means = scaler.means.slice(0, 6);
     const stds = scaler.stds.slice(0, 6);
-    const currentWindow = lastTwelveRef.current!.length;
+    const modelWindow = tfModel.current.inputs[0].shape[1] as number;
+    
+    // Si la fenêtre du modèle est différente de la fenêtre actuelle, on recalcule le dernier segment
+    let inputData = lastTwelveRef.current;
+    if (modelWindow !== inputData.length) {
+      const { lastTwelve } = createDataset(data, modelWindow);
+      inputData = lastTwelve;
+    }
+
+    const currentWindow = inputData.length;
 
     // Phase 1 : Générer un large pool de candidats (100+)
     for (let p = 0; p < 150; p++) {
       tf.tidy(() => {
         const noise = tf.randomNormal([1, currentWindow, 25], 0, 0.01 + (p * 0.001));
-        const input = tf.add(tf.tensor3d([lastTwelveRef.current!]), noise);
+        const input = tf.add(tf.tensor3d([inputData]), noise);
         const output = tfModel.current!.predict(input) as tf.Tensor;
         const scaledPred = output.arraySync() as number[][];
         
