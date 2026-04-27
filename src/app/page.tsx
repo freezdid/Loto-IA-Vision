@@ -17,6 +17,7 @@ export default function Home() {
   const [progress, setProgress] = useState(0);
   const [scrapeStatus, setScrapeStatus] = useState("");
   const [syncStatus, setSyncStatus] = useState("Local");
+  const [isOptimizing, setIsOptimizing] = useState(false);
 
   const [lossHistory, setLossHistory] = useState<{ epoch: number; loss: number }[]>([]);
   const [hasModel, setHasModel] = useState(false);
@@ -99,7 +100,7 @@ export default function Home() {
         updateModelReferences(processed);
         
         if (!tfModel.current) {
-          tfModel.current = buildAdvancedModel(windowLength, 19, 6);
+          tfModel.current = buildAdvancedModel(windowLength, 25, 6);
           setModelReady(true);
         }
         setScrapeStatus("Données à jour");
@@ -130,7 +131,7 @@ export default function Home() {
 
     // Fine-tuning: check if model exists, if not create it
     if (!tfModel.current) {
-      tfModel.current = buildAdvancedModel(windowLength, 19, 6);
+      tfModel.current = buildAdvancedModel(windowLength, 25, 6);
     }
 
     const { X, Y } = createDataset(data, windowLength);
@@ -169,42 +170,63 @@ export default function Home() {
 
   const handlePredict = async () => {
     if (!tfModel.current || !lastTwelveRef.current || !scalerRef.current) return;
+    setIsOptimizing(true);
     
-    const newPredictions: number[][] = [];
+    const candidates: { grille: number[], score: number }[] = [];
     const scaler = scalerRef.current;
     const means = scaler.means.slice(0, 6);
     const stds = scaler.stds.slice(0, 6);
+    const currentWindow = lastTwelveRef.current!.length;
 
-    for (let p = 0; p < numPredictions; p++) {
+    // Phase 1 : Générer un large pool de candidats (100+)
+    for (let p = 0; p < 150; p++) {
       tf.tidy(() => {
-        // Sécurité : s'assurer que la longueur des données correspond à la fenêtre attendue
-        const currentWindow = lastTwelveRef.current!.length;
-        const noise = tf.randomNormal([1, currentWindow, 19], 0, p * 0.015);
+        const noise = tf.randomNormal([1, currentWindow, 25], 0, 0.01 + (p * 0.001));
         const input = tf.add(tf.tensor3d([lastTwelveRef.current!]), noise);
-        
         const output = tfModel.current!.predict(input) as tf.Tensor;
         const scaledPred = output.arraySync() as number[][];
         
         if (scaledPred && scaledPred[0]) {
-          const finalPred = scaledPred[0].map((val, i) => Math.round((val * stds[i]) + means[i]));
-          
-          for(let i=0; i<5; i++) {
-            finalPred[i] = Math.max(1, Math.min(49, finalPred[i]));
-          }
+          let finalPred = scaledPred[0].map((val, i) => Math.round((val * stds[i]) + means[i]));
+          for(let i=0; i<5; i++) finalPred[i] = Math.max(1, Math.min(49, finalPred[i]));
           finalPred[5] = Math.max(1, Math.min(10, finalPred[5]));
           
-          // S'assurer que les numéros principaux sont uniques
-          const mainNums = Array.from(new Set(finalPred.slice(0, 5))).sort((a,b) => a-b);
+          let mainNums = Array.from(new Set(finalPred.slice(0, 5))).sort((a,b) => a-b);
           while(mainNums.length < 5) {
             const extra = Math.floor(Math.random() * 49) + 1;
             if(!mainNums.includes(extra)) mainNums.push(extra);
           }
+          const grille = [...mainNums.sort((a,b) => a-b), finalPred[5]];
           
-          newPredictions.push([...mainNums.sort((a,b) => a-b), finalPred[5]]);
+          // Phase 2 : Scoring GTO (Game Theory Optimal)
+          let score = 0;
+          const stats = analyzeTypicality(grille);
+          if (stats.sumStatus === 'Optimal') score += 50;
+          if (stats.balanceStatus === 'Équilibré') score += 30;
+          
+          // Bonus si contient des numéros fréquents
+          if (frequencies) {
+            grille.slice(0,5).forEach(n => {
+              if (frequencies.topNums.includes(n)) score += 5;
+            });
+            if (frequencies.topChances.includes(grille[5])) score += 10;
+          }
+          
+          candidates.push({ grille, score });
         }
       });
+      // Yield every 50 grilles for UI
+      if (p % 50 === 0) await tf.nextFrame();
     }
-    setPredictions(newPredictions);
+
+    // Phase 3 : Sélection des meilleurs
+    const topGrilles = candidates
+      .sort((a, b) => b.score - a.score)
+      .slice(0, numPredictions)
+      .map(c => c.grille);
+
+    setPredictions(topGrilles);
+    setIsOptimizing(false);
   };
 
   const handleExport = () => {
@@ -344,8 +366,9 @@ export default function Home() {
             </AnimatePresence>
           </div>
 
-          <button onClick={handlePredict} disabled={!modelReady || isTraining} className="btn-accent w-full md:w-fit z-10 mt-auto">
-            Lancer les Calculs <ChevronRight className="w-5 h-5" />
+          <button onClick={handlePredict} disabled={!modelReady || isTraining || isOptimizing} className="btn-accent w-full md:w-fit z-10 mt-auto">
+            {isOptimizing ? <RefreshCw className="w-5 h-5 animate-spin" /> : <ChevronRight className="w-5 h-5" />}
+            {isOptimizing ? "Optimisation GTO..." : "Lancer les Calculs"}
           </button>
         </motion.div>
 

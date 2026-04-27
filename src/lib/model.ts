@@ -25,6 +25,12 @@ export interface ProcessedDraw extends LotoDraw {
   impair: number;
   is_under_24: number;
   is_under_40: number;
+  last_seen_num0: number;
+  last_seen_num1: number;
+  last_seen_num2: number;
+  last_seen_num3: number;
+  last_seen_num4: number;
+  last_seen_chance: number;
 }
 
 const pairs = new Set([2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30, 32, 34, 36, 38, 40, 42, 44, 46, 48, 50]);
@@ -47,8 +53,21 @@ export function processData(draws: LotoDraw[]): ProcessedDraw[] {
     return count;
   };
 
+  const lastSeenMap: Record<number, number> = {};
+  const lastSeenChanceMap: Record<number, number> = {};
+
   return reversed.map((d, i) => {
     const nums = [d.num0, d.num1, d.num2, d.num3, d.num4];
+    
+    // Calculer last_seen
+    const lastSeen = nums.map(n => {
+      const dist = lastSeenMap[n] !== undefined ? i - lastSeenMap[n] : i;
+      lastSeenMap[n] = i;
+      return dist;
+    });
+    const distChance = lastSeenChanceMap[d.chance] !== undefined ? i - lastSeenChanceMap[d.chance] : i;
+    lastSeenChanceMap[d.chance] = i;
+
     return {
       ...d,
       freq_num0: getFreq(i, 'num0', d.num0),
@@ -63,7 +82,13 @@ export function processData(draws: LotoDraw[]): ProcessedDraw[] {
       pair: countPairs(nums),
       impair: countImpairs(nums),
       is_under_24: countUnder(nums, 24),
-      is_under_40: countUnder(nums, 40)
+      is_under_40: countUnder(nums, 40),
+      last_seen_num0: lastSeen[0],
+      last_seen_num1: lastSeen[1],
+      last_seen_num2: lastSeen[2],
+      last_seen_num3: lastSeen[3],
+      last_seen_num4: lastSeen[4],
+      last_seen_chance: distChance
     };
   });
 }
@@ -109,7 +134,8 @@ export function createDataset(processed: ProcessedDraw[], windowLength: number =
   const data = processed.map(d => [
     d.num0, d.num1, d.num2, d.num3, d.num4, d.chance,
     d.freq_num0, d.freq_num1, d.freq_num2, d.freq_num3, d.freq_num4, d.freq_chance,
-    d.sum_diff, d.pair_chance, d.impair_chance, d.pair, d.impair, d.is_under_24, d.is_under_40
+    d.sum_diff, d.pair_chance, d.impair_chance, d.pair, d.impair, d.is_under_24, d.is_under_40,
+    d.last_seen_num0, d.last_seen_num1, d.last_seen_num2, d.last_seen_num3, d.last_seen_num4, d.last_seen_chance
   ]);
 
   const scaler = new StandardScaler();
@@ -156,36 +182,45 @@ export function buildModel(windowLength: number, numFeatures: number, numLabels:
 }
 
 export function buildAdvancedModel(windowLength: number, numFeatures: number, numLabels: number) {
-  const model = tf.sequential();
+  const input = tf.input({ shape: [windowLength, numFeatures] });
   
-  // Couche Bidirectionnelle LSTM pour analyser dans les deux sens
-  model.add(tf.layers.bidirectional({
+  // LSTM Path
+  const lstm1 = tf.layers.bidirectional({
     layer: tf.layers.lstm({ units: 128, returnSequences: true, kernelInitializer: 'glorotNormal' }) as any,
-    inputShape: [windowLength, numFeatures],
     mergeMode: 'concat'
-  }));
+  }).apply(input) as tf.SymbolicTensor;
   
-  model.add(tf.layers.dropout({ rate: 0.2 }));
+  const dropout1 = tf.layers.dropout({ rate: 0.2 }).apply(lstm1) as tf.SymbolicTensor;
   
-  model.add(tf.layers.bidirectional({
-    layer: tf.layers.lstm({ units: 64, returnSequences: false, kernelInitializer: 'glorotNormal' }) as any,
+  const lstm2 = tf.layers.bidirectional({
+    layer: tf.layers.lstm({ units: 64, returnSequences: true, kernelInitializer: 'glorotNormal' }) as any,
     mergeMode: 'concat'
-  }));
+  }).apply(dropout1) as tf.SymbolicTensor;
+
+  // Simplified Attention / Gating
+  const attentionWeights = tf.layers.dense({ 
+    units: 1, 
+    activation: 'tanh' 
+  }).apply(lstm2) as tf.SymbolicTensor;
   
-  model.add(tf.layers.dropout({ rate: 0.2 }));
-  
-  // Couches denses profondes
-  model.add(tf.layers.dense({ units: 64, activation: 'relu' }));
-  model.add(tf.layers.dense({ units: numLabels }));
+  const softWeights = tf.layers.softmax({ axis: 1 }).apply(attentionWeights) as tf.SymbolicTensor;
+  const weighted = tf.layers.multiply().apply([lstm2, softWeights]) as tf.SymbolicTensor;
+  const pooled = tf.layers.globalAveragePooling1d().apply(weighted) as tf.SymbolicTensor;
+
+  const dense1 = tf.layers.dense({ units: 64, activation: 'relu' }).apply(pooled) as tf.SymbolicTensor;
+  const output = tf.layers.dense({ units: numLabels }).apply(dense1) as tf.SymbolicTensor;
+
+  const model = tf.model({ inputs: input, outputs: output });
 
   model.compile({
     loss: 'meanAbsoluteError',
-    optimizer: tf.train.adam(0.001),
+    optimizer: tf.train.adam(0.0005), // LR plus faible pour l'attention
     metrics: ['accuracy']
   });
 
   return model;
 }
+
 
 
 export async function runBacktest(data: ProcessedDraw[], windowLength: number, testSize: number = 50, onProgress?: (p: number) => void) {
@@ -201,7 +236,8 @@ export async function runBacktest(data: ProcessedDraw[], windowLength: number, t
   const testFeatures = testData.map(d => [
     d.num0, d.num1, d.num2, d.num3, d.num4, d.chance,
     d.freq_num0, d.freq_num1, d.freq_num2, d.freq_num3, d.freq_num4, d.freq_chance,
-    d.sum_diff, d.pair_chance, d.impair_chance, d.pair, d.impair, d.is_under_24, d.is_under_40
+    d.sum_diff, d.pair_chance, d.impair_chance, d.pair, d.impair, d.is_under_24, d.is_under_40,
+    d.last_seen_num0, d.last_seen_num1, d.last_seen_num2, d.last_seen_num3, d.last_seen_num4, d.last_seen_chance
   ]);
   const scaledTest = scaler.transform(testFeatures);
   const XTest: number[][][] = [];
@@ -212,7 +248,7 @@ export async function runBacktest(data: ProcessedDraw[], windowLength: number, t
     YTest.push(scaledTest[i + windowLength].slice(0, 6));
   }
   
-  const model = buildAdvancedModel(windowLength, 19, 6);
+  const model = buildAdvancedModel(windowLength, 25, 6);
   
   // Train
   const xs = tf.tensor3d(xTrain);
