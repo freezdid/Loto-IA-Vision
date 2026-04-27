@@ -54,7 +54,7 @@ export default function Home() {
       // 2. Sync with Cloud (Vercel Blob)
       setSyncStatus("Syncing...");
       try {
-        const syncRes = await fetch('/api/sync');
+        const syncRes = await fetch('/api/sync', { cache: 'no-store' });
         const syncJson = await syncRes.json();
         if (syncJson.success && syncJson.data && syncJson.data.length > (savedDraws?.length || 0)) {
           setData(syncJson.data);
@@ -81,7 +81,7 @@ export default function Home() {
       if (savedPreds) setPredictionHistory(savedPreds);
       
       try {
-        const predSync = await fetch('/api/sync?type=predictions');
+        const predSync = await fetch('/api/sync?type=predictions', { cache: 'no-store' });
         const predJson = await predSync.json();
         if (predJson.success && predJson.data && predJson.data.length > 0) {
           setPredictionHistory(predJson.data);
@@ -309,19 +309,22 @@ export default function Home() {
         grilles: topGrilles
       };
       
-      // Use functional update to avoid stale closures
-      setPredictionHistory(prev => {
-        const updated = [newSaved, ...prev].slice(0, 50);
-        
-        // Persist local and cloud
-        savePredictions(updated);
-        fetch('/api/sync', {
+      const updated = [newSaved, ...predictionHistory].slice(0, 50);
+      setPredictionHistory(updated);
+      
+      // Persist local and cloud
+      await savePredictions(updated);
+      try {
+        await fetch('/api/sync', {
           method: 'POST',
+          headers: { 'Cache-Control': 'no-cache' },
           body: JSON.stringify({ data: updated, type: 'predictions' })
-        }).catch(e => console.error("Cloud sync failed:", e));
-        
-        return updated;
-      });
+        });
+        setSyncStatus("Cloud Updated");
+      } catch (e) { 
+        console.error("Cloud sync failed:", e); 
+        setSyncStatus("Local Only");
+      }
     }
   };
 

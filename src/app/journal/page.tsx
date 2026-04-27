@@ -24,7 +24,7 @@ export default function Journal() {
       try {
         // Sync Draws first (needed for matching)
         if (!draws || draws.length === 0) {
-          const resDraws = await fetch('/api/sync?type=draws');
+          const resDraws = await fetch('/api/sync?type=draws', { cache: 'no-store' });
           const jsonDraws = await resDraws.json();
           if (jsonDraws.success && jsonDraws.data) {
             setData(jsonDraws.data);
@@ -32,7 +32,7 @@ export default function Journal() {
         }
 
         // Sync Predictions
-        const res = await fetch('/api/sync?type=predictions');
+        const res = await fetch('/api/sync?type=predictions', { cache: 'no-store' });
         const json = await res.json();
         if (json.success && json.data) {
           setPredictions(json.data);
