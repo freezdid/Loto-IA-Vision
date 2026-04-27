@@ -88,3 +88,21 @@ export async function hasSavedModel(): Promise<boolean> {
   const models = await tf.io.listModels();
   return !!models[MODEL_PATH];
 }
+
+// Cloud Model Sync (Experimental for Cron)
+export async function exportModel() {
+  if (!(await hasSavedModel())) return null;
+  // This is tricky in browser. We'll use a virtual IO handler to get the data.
+  let modelData: any = {};
+  await (await loadModel())?.save(tf.io.withSaveHandler(async (artifacts) => {
+    modelData = artifacts;
+    return { modelArtifactsInfo: { dateSaved: new Date(), modelTopologyType: 'JSON' } };
+  }));
+  return modelData;
+}
+
+export async function importModel(artifacts: any) {
+  const model = await tf.loadLayersModel(tf.io.fromMemory(artifacts));
+  await saveModel(model);
+  return model;
+}

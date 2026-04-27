@@ -5,7 +5,9 @@ export async function GET(req: Request) {
   try {
     const { searchParams } = new URL(req.url);
     const type = searchParams.get('type') || 'draws';
-    const path = type === 'predictions' ? 'predictions_history.json' : 'loto_history.json';
+    let path = 'loto_history.json';
+    if (type === 'predictions') path = 'predictions_history.json';
+    if (type === 'model') path = 'loto_model_meta.json';
     
     const data = await loadFromBlob(path);
     return NextResponse.json({ success: true, data });
@@ -17,7 +19,9 @@ export async function GET(req: Request) {
 export async function POST(req: Request) {
   try {
     const { data, type } = await req.json();
-    const path = type === 'predictions' ? 'predictions_history.json' : 'loto_history.json';
+    let path = 'loto_history.json';
+    if (type === 'predictions') path = 'predictions_history.json';
+    if (type === 'model') path = 'loto_model_meta.json';
     
     const url = await saveToBlob(data, path);
     return NextResponse.json({ success: true, url });

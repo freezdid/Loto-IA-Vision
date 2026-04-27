@@ -7,7 +7,7 @@ import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'rec
 import * as tf from '@tensorflow/tfjs';
 import { processData, createDataset, buildAdvancedModel, runBacktest, ProcessedDraw } from '../lib/model';
 import { calculateFrequencies, analyzeTypicality } from '../lib/stats';
-import { loadDraws, saveDraws, saveModel, loadModel, hasSavedModel, loadPredictions, savePredictions, SavedPrediction } from '../lib/storage';
+import { loadDraws, saveDraws, saveModel, loadModel, hasSavedModel, loadPredictions, savePredictions, SavedPrediction, exportModel } from '../lib/storage';
 import Link from 'next/link';
 
 export default function Home() {
@@ -30,6 +30,9 @@ export default function Home() {
   const [predictions, setPredictions] = useState<number[][]>([]);
   const [frequencies, setFrequencies] = useState<{ topNums: number[], topChances: number[] } | null>(null);
   const [predictionHistory, setPredictionHistory] = useState<SavedPrediction[]>([]);
+  const [simNumbers, setSimNumbers] = useState<number[]>([1, 2, 3, 4, 5, 1]);
+  const [simResult, setSimResult] = useState<{ score: number, analysis: string } | null>(null);
+  const [isSyncingModel, setIsSyncingModel] = useState(false);
 
   // Keep references for tensorflow model and data
   const tfModel = useRef<tf.LayersModel | null>(null);
@@ -287,12 +290,59 @@ export default function Home() {
   };
 
   const handleExport = () => {
-    const blob = new Blob([JSON.stringify(data)], { type: 'application/json' });
+    const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `loto_ia_vision_export_${new Date().toISOString().split('T')[0]}.json`;
+    a.download = `loto_ia_predictions_${new Date().toISOString().split('T')[0]}.json`;
     a.click();
+  };
+
+  const handleSimulate = () => {
+    if (!data.length) return;
+    const { topNums, topChances } = calculateFrequencies(data);
+    const stats = analyzeTypicality(simNumbers.slice(0, 5), simNumbers[5]);
+    
+    // Simple scoring logic
+    let score = 0;
+    // 1. Frequencies
+    simNumbers.slice(0, 5).forEach(n => { if (topNums.includes(n)) score += 10; });
+    if (topChances.includes(simNumbers[5])) score += 15;
+    
+    // 2. Typicality
+    if (stats.isTypicalSum) score += 20;
+    if (stats.isTypicalParity) score += 15;
+    
+    // 3. Spacing
+    const sorted = [...simNumbers.slice(0, 5)].sort((a, b) => a - b);
+    let gaps = 0;
+    for(let i=1; i<5; i++) gaps += (sorted[i] - sorted[i-1]);
+    if (gaps > 20 && gaps < 40) score += 20;
+
+    let analysis = "";
+    if (score > 60) analysis = "Excellente conformité aux patterns historiques.";
+    else if (score > 40) analysis = "Combinaison équilibrée, dans la moyenne.";
+    else analysis = "Cette grille s'éloigne des statistiques habituelles.";
+
+    setSimResult({ score, analysis });
+  };
+
+  const handleSyncModel = async () => {
+    if (!modelReady) return;
+    setIsSyncingModel(true);
+    try {
+      const modelData = await exportModel();
+      if (modelData) {
+        await fetch('/api/sync', {
+          method: 'POST',
+          body: JSON.stringify({ data: modelData, type: 'model' })
+        });
+        setSyncStatus("IA Cloud Ready");
+      }
+    } catch (e) {
+      console.error("Sync model failed:", e);
+    }
+    setIsSyncingModel(false);
   };
 
   const handleImport = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -374,15 +424,27 @@ export default function Home() {
             Exploitez la puissance des réseaux de neurones LSTM avec Fine-Tuning et stockage persistant.
           </p>
         </div>
-        <div className="flex gap-4">
-           <Link href="/history" className="btn-ghost">
-             <Calendar className="w-5 h-5" />
-             <span>Historique</span>
-           </Link>
-           <button onClick={handleTrain} disabled={data.length === 0 || isTraining} className="btn-primary">
-             {isTraining ? <RefreshCw className="w-5 h-5 animate-spin" /> : <Play className="w-5 h-5" />}
-             <span>{hasModel ? "Fine-Tune" : "Entraîner"}</span>
-           </button>
+        <div className="flex flex-wrap gap-4">
+            <Link href="/journal" className="btn-ghost text-accent">
+              <History className="w-5 h-5" />
+              <span>Journal</span>
+            </Link>
+            <Link href="/history" className="btn-ghost">
+              <Calendar className="w-5 h-5" />
+              <span>Historique</span>
+            </Link>
+            <button 
+                onClick={handleSyncModel}
+                disabled={!modelReady || isSyncingModel}
+                className={`btn-ghost ${isSyncingModel ? 'animate-pulse' : ''}`}
+              >
+                <RefreshCw className={`w-5 h-5 ${isSyncingModel ? 'animate-spin' : ''}`} />
+                <span>Sync IA</span>
+            </button>
+            <button onClick={handleTrain} disabled={data.length === 0 || isTraining} className="btn-primary">
+              {isTraining ? <RefreshCw className="w-5 h-5 animate-spin" /> : <Play className="w-5 h-5" />}
+              <span>{hasModel ? "Fine-Tune" : "Entraîner"}</span>
+            </button>
         </div>
       </header>
 
@@ -558,9 +620,58 @@ export default function Home() {
           </div>
         </motion.div>
 
+        {/* Grid Simulator */}
+        <motion.div className="md:col-span-3 glass-panel p-6 flex flex-col gap-6">
+          <div className="flex justify-between items-center">
+            <h3 className="font-bold text-lg flex items-center gap-2"><Target className="w-4 h-4 text-accent" /> Simulateur de Grille</h3>
+            {simResult && (
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] font-black text-slate-500">SCORE IA:</span>
+                <span className={`text-sm font-black ${simResult.score > 50 ? 'text-green-400' : 'text-loto-yellow'}`}>{simResult.score}%</span>
+              </div>
+            )}
+          </div>
+          
+          <div className="grid grid-cols-6 gap-2">
+            {[0,1,2,3,4,5].map(idx => (
+              <div key={idx} className="space-y-1">
+                <input 
+                  type="number" 
+                  min="1" 
+                  max={idx === 5 ? 10 : 49}
+                  value={simNumbers[idx]}
+                  onChange={(e) => {
+                    const next = [...simNumbers];
+                    next[idx] = parseInt(e.target.value) || 1;
+                    setSimNumbers(next);
+                  }}
+                  className={`w-full bg-slate-900/50 border ${idx === 5 ? 'border-loto-red/30 focus:border-loto-red' : 'border-white/10 focus:border-accent'} rounded-lg p-2 text-center text-sm font-bold outline-none transition-colors`}
+                />
+                <span className="block text-center text-[8px] font-black text-slate-600 uppercase">{idx === 5 ? 'Chance' : `N°${idx+1}`}</span>
+              </div>
+            ))}
+          </div>
+
+          <button onClick={handleSimulate} className="btn-primary w-full py-2 text-xs">
+            Analyser la Combinaison
+          </button>
+
+          {simResult && (
+            <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-[10px] text-center text-slate-400 italic">
+              "{simResult.analysis}"
+            </motion.p>
+          )}
+        </motion.div>
+
         {/* Heatmap Card */}
         <motion.div className="md:col-span-3 glass-panel p-6 flex flex-col gap-6">
-          <h3 className="font-bold text-lg flex items-center gap-2"><ListOrdered className="w-4 h-4 text-loto-yellow" /> Chaleur des Numéros</h3>
+          <div className="flex items-center justify-between mb-4">
+             <h3 className="font-bold text-lg flex items-center gap-2"><ListOrdered className="w-4 h-4 text-loto-yellow" /> Chaleur des Numéros</h3>
+             <Link href="/journal" className="flex items-center gap-2 text-sm font-bold text-slate-400 hover:text-accent transition-colors">
+                <History className="w-4 h-4" />
+                Journal
+              </Link>
+          </div>
           <p className="text-[10px] text-slate-500 uppercase font-black -mt-4">Les 10 numéros les plus fréquents</p>
           <div className="flex flex-wrap gap-3">
              {frequencies?.topNums.map((num, i) => (
