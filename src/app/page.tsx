@@ -79,8 +79,8 @@ export default function Home() {
     init();
   }, []);
 
-  const updateModelReferences = (currentData: ProcessedDraw[]) => {
-    const { scaler, lastTwelve } = createDataset(currentData, windowLength);
+  const updateModelReferences = (currentData: ProcessedDraw[], length: number = windowLength) => {
+    const { scaler, lastTwelve } = createDataset(currentData, length);
     scalerRef.current = scaler;
     lastTwelveRef.current = lastTwelve;
   };
@@ -177,8 +177,9 @@ export default function Home() {
 
     for (let p = 0; p < numPredictions; p++) {
       tf.tidy(() => {
-        // Ajout d'un léger bruit sur l'input pour varier les prédictions
-        const noise = tf.randomNormal([1, windowLength, 19], 0, p * 0.015);
+        // Sécurité : s'assurer que la longueur des données correspond à la fenêtre attendue
+        const currentWindow = lastTwelveRef.current!.length;
+        const noise = tf.randomNormal([1, currentWindow, 19], 0, p * 0.015);
         const input = tf.add(tf.tensor3d([lastTwelveRef.current!]), noise);
         
         const output = tfModel.current!.predict(input) as tf.Tensor;
@@ -366,7 +367,7 @@ export default function Home() {
                 onChange={(e) => {
                   const val = parseInt(e.target.value);
                   setWindowLength(val);
-                  updateModelReferences(data);
+                  updateModelReferences(data, val);
                 }}
                 className="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-primary" 
               />
