@@ -4,6 +4,8 @@ import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { ChevronLeft, Calendar, Search, Filter } from 'lucide-react';
 import Link from 'next/link';
+import { loadDraws } from '../../lib/storage';
+
 
 interface Draw {
   day: string;
@@ -23,10 +25,23 @@ export default function HistoryPage() {
 
   useEffect(() => {
     async function fetchDraws() {
+      // 1. Try IndexedDB first (most up-to-date)
+      try {
+        const saved = await loadDraws();
+        if (saved && saved.length > 0) {
+          setDraws([...saved].reverse());
+          setLoading(false);
+          // Still fetch from API to ensure sync, but UI is already responsive
+        }
+      } catch (e) { console.error(e); }
+
+      // 2. Fetch from API
       try {
         const res = await fetch('/api/draws');
         const json = await res.json();
-        if (json.success) setDraws(json.results);
+        if (json.success && json.results.length > 0) {
+          setDraws(json.results);
+        }
       } catch (e) { console.error(e); }
       setLoading(false);
     }

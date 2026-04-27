@@ -135,12 +135,14 @@ export function buildModel(windowLength: number, numFeatures: number, numLabels:
   model.add(tf.layers.lstm({
     units: 100,
     inputShape: [windowLength, numFeatures],
-    returnSequences: true
+    returnSequences: true,
+    kernelInitializer: 'glorotNormal'
   }));
   model.add(tf.layers.lstm({
     units: 100,
     dropout: 0.1,
-    returnSequences: false
+    returnSequences: false,
+    kernelInitializer: 'glorotNormal'
   }));
   model.add(tf.layers.dense({ units: numLabels }));
 
@@ -158,7 +160,7 @@ export function buildAdvancedModel(windowLength: number, numFeatures: number, nu
   
   // Couche Bidirectionnelle LSTM pour analyser dans les deux sens
   model.add(tf.layers.bidirectional({
-    layer: tf.layers.lstm({ units: 128, returnSequences: true }) as any,
+    layer: tf.layers.lstm({ units: 128, returnSequences: true, kernelInitializer: 'glorotNormal' }) as any,
     inputShape: [windowLength, numFeatures],
     mergeMode: 'concat'
   }));
@@ -166,7 +168,7 @@ export function buildAdvancedModel(windowLength: number, numFeatures: number, nu
   model.add(tf.layers.dropout({ rate: 0.2 }));
   
   model.add(tf.layers.bidirectional({
-    layer: tf.layers.lstm({ units: 64, returnSequences: false }) as any,
+    layer: tf.layers.lstm({ units: 64, returnSequences: false, kernelInitializer: 'glorotNormal' }) as any,
     mergeMode: 'concat'
   }));
   
@@ -184,6 +186,7 @@ export function buildAdvancedModel(windowLength: number, numFeatures: number, nu
 
   return model;
 }
+
 
 export async function runBacktest(data: ProcessedDraw[], windowLength: number, testSize: number = 50, onProgress?: (p: number) => void) {
   if (data.length <= testSize + windowLength) return null;
