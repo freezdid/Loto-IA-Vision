@@ -14,10 +14,24 @@ export default function Journal() {
 
   useEffect(() => {
     async function init() {
+      // 1. Load Local
       const draws = await loadDraws();
       const preds = await loadPredictions();
       if (draws) setData(draws);
       if (preds) setPredictions(preds);
+
+      // 2. Load Cloud
+      try {
+        const res = await fetch('/api/sync?type=predictions');
+        const json = await res.json();
+        if (json.success && json.data) {
+          setPredictions(json.data);
+          // Sync back to local
+          const { savePredictions } = await import('@/lib/storage');
+          await savePredictions(json.data);
+        }
+      } catch (e) { console.error("Cloud sync failed:", e); }
+
       setLoading(false);
     }
     init();
