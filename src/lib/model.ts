@@ -9,9 +9,11 @@ export interface LotoDraw {
   num3: number;
   num4: number;
   chance: number;
+  dateStr?: string; // Optional raw date string
 }
 
 export interface ProcessedDraw extends LotoDraw {
+  fullDate: number; // Timestamp for sorting/comparison
   freq_num0: number;
   freq_num1: number;
   freq_num2: number;
@@ -66,8 +68,20 @@ export function processData(draws: LotoDraw[]): ProcessedDraw[] {
     const distChance = lastSeenChanceMap[d.chance] !== undefined ? i - lastSeenChanceMap[d.chance] : i;
     lastSeenChanceMap[d.chance] = i;
 
+    // Convert FDJ date format to timestamp
+    // Example: "Mercredi 24" + "Avril 2024"
+    const parseDate = () => {
+      try {
+        const dayPart = d.day.split(' ')[1]; // "24"
+        const monthYear = d.month_year.split(' '); // ["Avril", "2024"]
+        const months: any = { "Janvier": 0, "Février": 1, "Mars": 2, "Avril": 3, "Mai": 4, "Juin": 5, "Juillet": 6, "Août": 7, "Septembre": 8, "Octobre": 9, "Novembre": 10, "Décembre": 11 };
+        return new Date(parseInt(monthYear[1]), months[monthYear[0]], parseInt(dayPart)).getTime();
+      } catch(e) { return Date.now(); }
+    };
+
     return {
       ...d,
+      fullDate: parseDate(),
       freq_num0: updateFreq('num0', d.num0),
       freq_num1: updateFreq('num1', d.num1),
       freq_num2: updateFreq('num2', d.num2),

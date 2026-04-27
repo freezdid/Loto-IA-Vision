@@ -27,7 +27,7 @@ export default function Journal() {
     const predNums = pred.slice(0, 5);
     const predChance = pred[5];
     
-    const drawNums = draw.numbers;
+    const drawNums = [draw.num0, draw.num1, draw.num2, draw.num3, draw.num4];
     const drawChance = draw.chance;
 
     const matchedNums = predNums.filter(n => drawNums.includes(n));
@@ -42,13 +42,12 @@ export default function Journal() {
 
   const getResultsForPrediction = (pred: SavedPrediction) => {
     // Find draws that happened AFTER this prediction
-    const predDate = new Date(pred.timestamp);
-    const laterDraws = data.filter(d => new Date(d.date) > predDate).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    const predTime = new Date(pred.timestamp).getTime();
+    const laterDraws = data.filter(d => d.fullDate > predTime).sort((a, b) => a.fullDate - b.fullDate);
     
     if (laterDraws.length === 0) return null;
 
-    // Compare each grille with the very next draw (or all later draws?)
-    // Usually we compare with the "next" draw.
+    // Compare each grille with the very next draw
     const nextDraw = laterDraws[0];
     
     const scores = pred.grilles.map(g => checkMatch(g, nextDraw));
@@ -128,7 +127,7 @@ export default function Journal() {
                       {result ? (
                         <div className="space-y-2">
                           <div className="flex items-center gap-2">
-                            <span className="text-[10px] font-black uppercase text-loto-yellow">Résultat Tirage du {new Date(result.draw.date).toLocaleDateString()}</span>
+                            <span className="text-[10px] font-black uppercase text-loto-yellow">Résultat Tirage du {new Date(result.draw.fullDate).toLocaleDateString()}</span>
                           </div>
                           <div className="flex items-center gap-4">
                             <div className="flex flex-col items-center">
