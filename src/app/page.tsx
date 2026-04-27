@@ -309,22 +309,24 @@ export default function Home() {
         grilles: topGrilles
       };
       
-      const updated = [newSaved, ...predictionHistory].slice(0, 50);
-      setPredictionHistory(updated);
-      
-      // Persist local and cloud
-      await savePredictions(updated);
-      try {
-        await fetch('/api/sync', {
+      // We use a functional-style update logic but applied immediately for persistence
+      setPredictionHistory(prev => {
+        const updated = [newSaved, ...prev].slice(0, 50);
+        
+        // PERSISTENCE (Triggered from within state update to ensure 'updated' is fresh)
+        savePredictions(updated);
+        fetch('/api/sync', {
           method: 'POST',
           headers: { 'Cache-Control': 'no-cache' },
           body: JSON.stringify({ data: updated, type: 'predictions' })
-        });
-        setSyncStatus("Cloud Updated");
-      } catch (e) { 
-        console.error("Cloud sync failed:", e); 
-        setSyncStatus("Local Only");
-      }
+        }).then(() => {
+           console.log("Cloud Push Success");
+        }).catch(e => console.error("Cloud sync failed:", e));
+
+        return updated;
+      });
+
+      setSyncStatus("Cloud Updated");
     }
   };
 

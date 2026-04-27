@@ -4,14 +4,7 @@ const BLOB_PATH = 'loto_history.json';
 
 export async function saveToBlob(data: any, pathname: string) {
   try {
-    // Delete old blobs to keep only one (optional, but cleaner)
-    const { blobs } = await list();
-    const oldBlobs = blobs.filter(b => b.pathname === pathname);
-    for (const b of oldBlobs) {
-      await del(b.url);
-    }
-
-    // Save new data
+    // Save new data (put with addRandomSuffix: false overwrites existing pathname)
     const { url } = await put(pathname, JSON.stringify(data), {
       access: 'public',
       addRandomSuffix: false,
