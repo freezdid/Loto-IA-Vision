@@ -1,73 +1,82 @@
-# 🎰 Loto IA Vision
+# 🎱 Loto IA Vision • Lab Prédictif
 
-![Next.js](https://img.shields.io/badge/Next.js-14+-black?style=for-the-badge&logo=next.js)
-![React](https://img.shields.io/badge/React-18-blue?style=for-the-badge&logo=react)
-![TensorFlow.js](https://img.shields.io/badge/TensorFlow.js-Orange?style=for-the-badge&logo=tensorflow)
-![TailwindCSS](https://img.shields.io/badge/TailwindCSS-06B6D4?style=for-the-badge&logo=tailwindcss)
+![FDJ Theme](https://img.shields.io/badge/Theme-FDJ%20Official-blue)
+![TensorFlow.js](https://img.shields.io/badge/Intelligence-TensorFlow.js-orange)
+![Next.js](https://img.shields.io/badge/Framework-Next.js%2016-black)
+![Vercel Blob](https://img.shields.io/badge/Sync-Vercel%20Blob-brightgreen)
 
-**Loto IA Vision** est une application web de prédiction de dernière génération. Basée sur un modèle de réseau de neurones **LSTM (Long Short-Term Memory)**, elle permet de récupérer en temps réel l'historique des tirages du Loto français et d'entraîner une Intelligence Artificielle **directement dans votre navigateur**.
-
-Ce projet est une réécriture complète, moderne et fullstack d'un projet original Jupyter Notebook (Keras/Python), transformé en une puissante application React/Next.js.
+**Loto IA Vision** est une plateforme d'analyse prédictive ultra-moderne utilisant des réseaux de neurones récurrents (**LSTM**) pour anticiper les tirages du Loto. Alliant design premium inspiré de la FDJ et intelligence artificielle de pointe, ce laboratoire permet de transformer des décennies de statistiques en visions stratégiques.
 
 ---
 
-## ✨ Fonctionnalités Principales
+## 🚀 Fonctionnalités Clés
 
-- **Scraping Automatique** : Route API Next.js dédiée pour collecter les milliers de tirages historiques du Loto en temps réel de manière fiable et rapide.
-- **Deep Learning In-Browser** : Entraînement complet du modèle LSTM (feature engineering, scaling, séquences temporelles) propulsé par `@tensorflow/tfjs` sans backend Python.
-- **Monitoring Visuel** : Suivi de l'apprentissage en direct grâce aux graphiques interactifs de la fonction de perte (Loss).
-- **Design "Glassmorphism" Premium** : Interface dynamique au thème "Rouge & Noir", animations fluides via `framer-motion`, et retour utilisateur immersif.
+### 🧠 Intelligence Artificielle Avancée
+- **Modèle LSTM Bidirectionnel** : Analyse les séquences de tirages dans les deux sens pour capturer les dépendances temporelles complexes.
+- **Fine-Tuning en Temps Réel** : Mise à jour du modèle à chaque nouveau tirage sans réentraînement complet, préservant la mémoire à long terme du réseau.
+- **Multi-Visions (1-10)** : Génération de jusqu'à 10 combinaisons uniques par injection de bruit neuronal contrôlé.
 
----
+### 📊 Analyse & Filtres Mathématiques
+- **Heatmap de Chaleur** : Visualisation instantanée des 10 numéros les plus fréquents et des numéros Chance favoris.
+- **Vérificateur de Typicité** : Analyse automatique de la **Somme** et de l'**Équilibre Parité (Pair/Impair)** pour s'assurer que les prédictions respectent les lois statistiques du hasard.
+- **Backtesting Intégré** : Module de simulation permettant de tester la précision du modèle sur les 50 derniers tirages réels avec barre de progression interactive.
 
-## 🛠️ Architecture Technique
-
-1. **Backend (API)** :
-   - `src/app/api/loto/route.ts` : Proxy de scraping utilisant `cheerio` pour récupérer et nettoyer le DOM html de l'historique du loto de façon structurée.
-   
-2. **IA & Mathématiques** :
-   - `src/lib/model.ts` : Implémente la logique d'analyse (paires, impaires, fréquences, sommes des écarts), un `StandardScaler` natif et la topologie séquentielle LSTM de TensorFlow.js.
-   
-3. **Frontend (UI)** :
-   - Dashboard principal gérant l'état global, la construction dynamique du réseau de neurones et l'orchestration des données via des graphiques `recharts`.
+### ☁️ Persistance & Synchronisation Cloud
+- **Vercel Blob Sync** : Synchronisation automatique de vos données entre tous vos navigateurs et appareils.
+- **Dual-Storage System** : Utilisation combinée de **SQLite** (côté serveur) et **IndexedDB** (côté client) pour une rapidité et une fiabilité maximale.
+- **Export/Import JSON** : Sauvegarde physique de votre base de données locale en un clic.
 
 ---
 
-## 🚀 Installation & Démarrage
+## 🎨 Design System (FDJ Edition)
+
+L'application arbore une interface "Dark Mode" premium utilisant les codes couleurs officiels de la Française des Jeux :
+- **Bleu FDJ** (`#0055A4`) : Structure et actions principales.
+- **Rouge Loto** (`#E1001A`) : Accents, alertes et analyses critiques.
+- **Jaune Chance** (`#FFD100`) : Numéros Chance et indicateurs de succès.
+- **Boules 3D** : Rendu réaliste des numéros avec éclairage dynamique et effets de verre.
+
+---
+
+## 🛠️ Installation & Configuration
 
 ### Pré-requis
-- **Node.js** (v18.0.0 ou supérieur)
-- **NPM** (inclus avec Node.js)
+- Node.js 20+
+- Un compte Vercel pour le déploiement cloud
 
-### Lancer le projet
-1. **Cloner le repository** (ou télécharger les fichiers) :
-   ```bash
-   git clone <votre-lien-repo>
-   cd loto
-   ```
+### Installation
+```bash
+git clone https://github.com/votre-repo/loto-ia-vision.git
+cd loto-ia-vision
+npm install
+```
 
-2. **Installer les dépendances** :
-   ```bash
-   npm install
-   ```
+### Variables d'Environnement
+Pour la persistance cloud, configurez votre store **Vercel Blob** et ajoutez le token :
+```env
+BLOB_READ_WRITE_TOKEN="votre_token_ici"
+```
 
-3. **Lancer le serveur de développement / production** :
-   ```bash
-   npm run build
-   npm start
-   ```
-
-4. **Accéder à l'application** :  
-   Ouvrez votre navigateur web et accédez à [http://localhost:3000](http://localhost:3000).
+### Lancer le Lab
+```bash
+npm run dev
+```
 
 ---
 
-## 💡 Mode d'emploi
-1. Cliquez sur **Acquérir les Données** pour lancer le crawler sur les serveurs d'archives.
-2. Une fois collectées, cliquez sur **Lancer l'Entraînement**. Attendez que le modèle ajuste ses poids mathématiques sur les données temporelles.
-3. Observez la chute de la courbe d'erreur de prédiction sur le graphe.
-4. Cliquez sur **Calculer** pour générer les probabilités et la prédiction du tout prochain tirage.
+## 📜 Méthodologie
+
+Le modèle traite chaque tirage comme un vecteur de 19 caractéristiques (numéros, fréquences, différences de somme, parité, etc.). Ces données sont normalisées via un `StandardScaler` avant d'être injectées dans une architecture neuronale profonde composée de :
+1. **Couche Bidirectionnelle LSTM (128 unités)**
+2. **Dropout (20%)**
+3. **Couche Bidirectionnelle LSTM (64 unités)**
+4. **Couches Denses (64 unités, ReLU)**
+5. **Couche de Sortie (6 unités)**
 
 ---
 
-*Note: Ce projet est fourni à des fins expérimentales et éducatives pour illustrer l'apprentissage du Machine Learning sur les séries temporelles.*
+## ⚖️ Avertissement Légal
+Cette application est un outil d'expérimentation basé sur des probabilités mathématiques et de l'intelligence artificielle. **Les jeux d'argent comportent des risques : endettement, isolement, dépendance.** Pour être aidé, appelez le 09 74 75 13 13 (appel non surtaxé).
+
+---
+**Développé avec passion par Antigravity Intelligence • © 2026**
