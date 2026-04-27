@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import * as cheerio from 'cheerio';
+import { saveDrawsToDB, getAllDrawsFromDB } from '@/lib/db';
 
 export async function GET() {
   try {
@@ -7,7 +8,7 @@ export async function GET() {
       headers: {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
       },
-      next: { revalidate: 3600 } // Cache for 1 hour
+      cache: 'no-store'
     });
 
     if (!res.ok) {
@@ -17,7 +18,7 @@ export async function GET() {
     const html = await res.text();
     const $ = cheerio.load(html);
 
-    const results: any[] = [];
+    const scrapedResults: any[] = [];
 
     $('table').first().find('tr').each((index, element) => {
       const textArray = $(element)
@@ -27,7 +28,7 @@ export async function GET() {
         .filter(p => p !== '');
 
       if (textArray.length >= 8) {
-        results.push({
+        scrapedResults.push({
           day: textArray[0],
           month_year: textArray[1],
           num0: parseInt(textArray[2], 10),
@@ -40,6 +41,14 @@ export async function GET() {
       }
     });
 
+    // Save to SQLite
+    if (scrapedResults.length > 0) {
+      saveDrawsToDB(scrapedResults);
+    }
+
+    // Get full history from DB
+    const results = getAllDrawsFromDB();
+
     return NextResponse.json({ success: true, results });
 
   } catch (error: any) {
@@ -47,3 +56,4 @@ export async function GET() {
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
 }
+

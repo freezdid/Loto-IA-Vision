@@ -252,9 +252,17 @@ export async function runBacktest(data: ProcessedDraw[], windowLength: number, t
     if (bons >= 2 || chanceOk) grillesGagnantes++;
   }
   
+  // Clean up tensors
+  xs.dispose();
+  ys.dispose();
+  xTestTensor.dispose();
+  predictions.dispose();
+  model.dispose();
+  
   return {
     testSize: predArray.length,
     avgBonsNumeros: (totalBonsNumeros / predArray.length).toFixed(2),
     winRate: ((grillesGagnantes / predArray.length) * 100).toFixed(1)
   };
 }
+
