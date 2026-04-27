@@ -21,6 +21,7 @@ export default function Home() {
   const [isBacktesting, setIsBacktesting] = useState(false);
   const [backtestStats, setBacktestStats] = useState<{ testSize: number, avgBonsNumeros: string, winRate: string } | null>(null);
   const [windowLength, setWindowLength] = useState(12);
+  const [hasModel, setHasModel] = useState(false);
 
   // Keep references for tensorflow model and data
   const tfModel = useRef<tf.Sequential | null>(null);
@@ -37,6 +38,7 @@ export default function Home() {
         updateModelReferences(savedDraws);
         
         const exists = await hasSavedModel();
+        setHasModel(exists);
         if (exists) {
           try {
             const model = await loadModel();
@@ -113,6 +115,7 @@ export default function Home() {
     });
     
     await saveModel(tfModel.current);
+    setHasModel(true);
     
     // Dispose tensors
     xs.dispose();
@@ -184,7 +187,7 @@ export default function Home() {
            </Link>
            <button onClick={handleTrain} disabled={data.length === 0 || isTraining} className="btn-primary">
              {isTraining ? <RefreshCw className="w-5 h-5 animate-spin" /> : <Play className="w-5 h-5" />}
-             <span>{hasSavedModel ? "Fine-Tune" : "Entraîner"}</span>
+             <span>{hasModel ? "Fine-Tune" : "Entraîner"}</span>
            </button>
         </div>
       </header>
