@@ -465,9 +465,41 @@ export default function Home() {
         </motion.div>
 
         {/* Performance Chart */}
-        <motion.div className="md:col-span-3 glass-panel p-6 flex flex-col gap-6">
-          <h3 className="font-bold text-lg flex items-center gap-2"><Activity className="w-4 h-4 text-accent" /> Loss History</h3>
-          <div className="h-48 md:h-64 w-full min-h-[180px]">
+        <motion.div className="md:col-span-3 glass-panel p-6 flex flex-col gap-6 relative overflow-hidden">
+          <div className="flex justify-between items-start z-10">
+            <div>
+              <h3 className="font-bold text-lg flex items-center gap-2"><Activity className="w-4 h-4 text-accent" /> Loss History</h3>
+              <p className="text-[10px] text-slate-500 uppercase font-black">Précision des neurones</p>
+            </div>
+            {isTraining && (
+               <span className="flex h-2 w-2 rounded-full bg-accent animate-ping" />
+            )}
+          </div>
+
+          <AnimatePresence>
+            {isTraining && (
+              <motion.div 
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: 'auto' }}
+                exit={{ opacity: 0, height: 0 }}
+                className="space-y-2 z-10"
+              >
+                <div className="flex justify-between text-[10px] font-black uppercase">
+                  <span className="text-accent">Entraînement en cours</span>
+                  <span className="text-white">{progress}%</span>
+                </div>
+                <div className="h-1.5 w-full bg-slate-900 rounded-full overflow-hidden">
+                  <motion.div 
+                    className="h-full bg-accent"
+                    initial={{ width: 0 }}
+                    animate={{ width: `${progress}%` }}
+                  />
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          <div className="h-48 md:h-64 w-full min-h-[180px] z-10">
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={lossHistory}>
                  <Line type="monotone" dataKey="loss" stroke="#3b82f6" strokeWidth={2} dot={false} />
