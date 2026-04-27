@@ -167,7 +167,7 @@ export default function Home() {
     const ys = tf.tensor2d(Y);
     const epochs = 50; // Quicker for fine-tuning
 
-    await tfModel.current.fit(xs, ys, {
+    await tfModel.current!.fit(xs, ys, {
       epochs,
       batchSize: 32,
       shuffle: true,
