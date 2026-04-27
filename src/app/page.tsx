@@ -30,7 +30,8 @@ export default function Home() {
   const [frequencies, setFrequencies] = useState<{ topNums: number[], topChances: number[] } | null>(null);
 
   // Keep references for tensorflow model and data
-  const tfModel = useRef<tf.Sequential | null>(null);
+  const tfModel = useRef<tf.LayersModel | null>(null);
+
   const scalerRef = useRef<any>(null);
   const lastTwelveRef = useRef<number[][] | null>(null);
 
