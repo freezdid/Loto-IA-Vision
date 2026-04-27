@@ -544,13 +544,17 @@ export default function Home() {
             )}
           </AnimatePresence>
 
-          <div className="h-48 md:h-64 w-full min-h-[180px] min-w-[0px] z-10">
-            <ResponsiveContainer width="100%" height="100%" minHeight={180}>
-              <LineChart data={lossHistory}>
-                 <Line type="monotone" dataKey="loss" stroke="#3b82f6" strokeWidth={2} dot={false} />
-                 <Tooltip contentStyle={{ backgroundColor: '#020617', border: '1px solid rgba(59,130,246,0.2)', borderRadius: '12px' }} itemStyle={{ color: '#3b82f6' }} labelClassName="hidden" />
-               </LineChart>
-             </ResponsiveContainer>
+          <div className="h-48 md:h-64 w-full min-h-[180px] min-w-full z-10 flex items-center justify-center">
+            {lossHistory.length > 0 ? (
+              <ResponsiveContainer width="99%" height="100%" minHeight={180}>
+                <LineChart data={lossHistory}>
+                   <Line type="monotone" dataKey="loss" stroke="#3b82f6" strokeWidth={2} dot={false} isAnimationActive={false} />
+                   <Tooltip contentStyle={{ backgroundColor: '#020617', border: '1px solid rgba(59,130,246,0.2)', borderRadius: '12px' }} itemStyle={{ color: '#3b82f6' }} labelClassName="hidden" />
+                 </LineChart>
+               </ResponsiveContainer>
+            ) : (
+              <div className="text-slate-600 text-[10px] uppercase font-black">En attente de données d'entraînement...</div>
+            )}
           </div>
         </motion.div>
 
