@@ -308,17 +308,20 @@ export default function Home() {
         timestamp: new Date().toISOString(),
         grilles: topGrilles
       };
-      const updatedHistory = [newSaved, ...predictionHistory].slice(0, 50);
-      setPredictionHistory(updatedHistory);
-      await savePredictions(updatedHistory);
       
-      // Sync to Cloud
-      try {
-        await fetch('/api/sync', {
+      // Use functional update to avoid stale closures
+      setPredictionHistory(prev => {
+        const updated = [newSaved, ...prev].slice(0, 50);
+        
+        // Persist local and cloud
+        savePredictions(updated);
+        fetch('/api/sync', {
           method: 'POST',
-          body: JSON.stringify({ data: updatedHistory, type: 'predictions' })
-        });
-      } catch (e) { console.error("Cloud pred push failed:", e); }
+          body: JSON.stringify({ data: updated, type: 'predictions' })
+        }).catch(e => console.error("Cloud sync failed:", e));
+        
+        return updated;
+      });
     }
   };
 
