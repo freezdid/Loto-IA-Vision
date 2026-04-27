@@ -15,13 +15,16 @@ export default function Home() {
   const [isTraining, setIsTraining] = useState(false);
   const [progress, setProgress] = useState(0);
   const [scrapeStatus, setScrapeStatus] = useState("");
+  const [syncStatus, setSyncStatus] = useState("Local");
+
   const [lossHistory, setLossHistory] = useState<{ epoch: number; loss: number }[]>([]);
-  const [prediction, setPrediction] = useState<number[] | null>(null);
+  const [hasModel, setHasModel] = useState(false);
   const [modelReady, setModelReady] = useState(false);
   const [isBacktesting, setIsBacktesting] = useState(false);
   const [backtestStats, setBacktestStats] = useState<{ testSize: number, avgBonsNumeros: string, winRate: string } | null>(null);
   const [windowLength, setWindowLength] = useState(12);
-  const [hasModel, setHasModel] = useState(false);
+  const [numPredictions, setNumPredictions] = useState(1);
+  const [predictions, setPredictions] = useState<number[][]>([]);
 
   // Keep references for tensorflow model and data
   const tfModel = useRef<tf.Sequential | null>(null);
@@ -36,21 +39,40 @@ export default function Home() {
       if (savedDraws && savedDraws.length > 0) {
         setData(savedDraws);
         updateModelReferences(savedDraws);
-        
-        const exists = await hasSavedModel();
-        setHasModel(exists);
-        if (exists) {
-          try {
-            const model = await loadModel();
-            tfModel.current = model as tf.Sequential;
-            setModelReady(true);
-          } catch (e) { console.error(e); }
-        }
       }
 
-      // 2. Auto-update from server
+      // 2. Sync with Cloud (Vercel Blob)
+      setSyncStatus("Syncing...");
+      try {
+        const syncRes = await fetch('/api/sync');
+        const syncJson = await syncRes.json();
+        if (syncJson.success && syncJson.data && syncJson.data.length > (savedDraws?.length || 0)) {
+          setData(syncJson.data);
+          await saveDraws(syncJson.data);
+          updateModelReferences(syncJson.data);
+          setSyncStatus("Cloud");
+        } else {
+          setSyncStatus(syncJson.success ? "Cloud Synced" : "Local Only");
+        }
+      } catch (e) { 
+        console.error("Sync failed:", e);
+        setSyncStatus("Local Only");
+      }
+      
+      const exists = await hasSavedModel();
+      setHasModel(exists);
+      if (exists) {
+        try {
+          const model = await loadModel();
+          tfModel.current = model as tf.Sequential;
+          setModelReady(true);
+        } catch (e) { console.error(e); }
+      }
+
+      // 3. Auto-update from server (Scraping)
       handleScrape();
     }
+
     init();
   }, []);
 
@@ -77,7 +99,17 @@ export default function Home() {
           setModelReady(true);
         }
         setScrapeStatus("Données à jour");
+
+        // Push to Cloud
+        try {
+          await fetch('/api/sync', {
+            method: 'POST',
+            body: JSON.stringify({ data: processed })
+          });
+          setSyncStatus("Cloud Updated");
+        } catch (e) { console.error("Cloud push failed:", e); }
       }
+
     } catch (e) {
       console.error(e);
       setScrapeStatus("Erreur mise à jour");
@@ -134,26 +166,67 @@ export default function Home() {
   const handlePredict = async () => {
     if (!tfModel.current || !lastTwelveRef.current || !scalerRef.current) return;
     
-    tf.tidy(() => {
-      const input = tf.tensor3d([lastTwelveRef.current!]);
-      const output = tfModel.current!.predict(input) as tf.Tensor;
-      output.array().then((scaledPred: any) => {
-        if (!scaledPred || !scaledPred[0]) return;
+    const newPredictions: number[][] = [];
+    const scaler = scalerRef.current;
+    const means = scaler.means.slice(0, 6);
+    const stds = scaler.stds.slice(0, 6);
+
+    for (let p = 0; p < numPredictions; p++) {
+      tf.tidy(() => {
+        // Ajout d'un léger bruit sur l'input pour varier les prédictions
+        const noise = tf.randomNormal([1, windowLength, 19], 0, p * 0.015);
+        const input = tf.add(tf.tensor3d([lastTwelveRef.current!]), noise);
         
-        const scaler = scalerRef.current;
-        const means = scaler.means.slice(0, 6);
-        const stds = scaler.stds.slice(0, 6);
-        const finalPred = (scaledPred[0] as number[]).map((val, i) => Math.round((val * stds[i]) + means[i]));
+        const output = tfModel.current!.predict(input) as tf.Tensor;
+        const scaledPred = output.arraySync() as number[][];
         
-        for(let i=0; i<5; i++) {
-          if (finalPred[i] < 1) finalPred[i] = 1;
-          if (finalPred[i] > 49) finalPred[i] = 49;
+        if (scaledPred && scaledPred[0]) {
+          const finalPred = scaledPred[0].map((val, i) => Math.round((val * stds[i]) + means[i]));
+          
+          for(let i=0; i<5; i++) {
+            finalPred[i] = Math.max(1, Math.min(49, finalPred[i]));
+          }
+          finalPred[5] = Math.max(1, Math.min(10, finalPred[5]));
+          
+          // S'assurer que les numéros principaux sont uniques
+          const mainNums = Array.from(new Set(finalPred.slice(0, 5))).sort((a,b) => a-b);
+          while(mainNums.length < 5) {
+            const extra = Math.floor(Math.random() * 49) + 1;
+            if(!mainNums.includes(extra)) mainNums.push(extra);
+          }
+          
+          newPredictions.push([...mainNums.sort((a,b) => a-b), finalPred[5]]);
         }
-        if (finalPred[5] < 1) finalPred[5] = 1;
-        if (finalPred[5] > 10) finalPred[5] = 10;
-        setPrediction(finalPred);
       });
-    });
+    }
+    setPredictions(newPredictions);
+  };
+
+  const handleExport = () => {
+    const blob = new Blob([JSON.stringify(data)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `loto_ia_vision_export_${new Date().toISOString().split('T')[0]}.json`;
+    a.click();
+  };
+
+  const handleImport = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = async (event) => {
+      try {
+        const json = JSON.parse(event.target?.result as string);
+        if (Array.isArray(json)) {
+          setData(json);
+          await saveDraws(json);
+          updateModelReferences(json);
+          alert("Import réussi !");
+        }
+      } catch (e) { alert("Format invalide"); }
+    };
+    reader.readAsText(file);
   };
 
   const handleBacktest = async () => {
@@ -168,6 +241,7 @@ export default function Home() {
     setIsBacktesting(false);
   };
 
+
   return (
     <main className="min-h-screen p-6 md:p-12 lg:p-16 flex flex-col gap-12">
       {/* Header Section */}
@@ -179,13 +253,13 @@ export default function Home() {
             className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 border border-primary/20 text-primary text-xs font-bold uppercase tracking-widest"
           >
             <Brain className="w-3.5 h-3.5" />
-            <span>Neural Intelligence • {scrapeStatus || "Optimisé"}</span>
+            <span>Neural Intelligence • {syncStatus} • {scrapeStatus || "Stable"}</span>
           </motion.div>
           <h1 className="text-4xl md:text-6xl font-black tracking-tighter">
             LOTO <span className="text-primary italic">IA</span> VISION
           </h1>
           <p className="text-slate-400 max-w-xl text-lg font-medium leading-relaxed">
-            Exploitez la puissance des réseaux de neurones LSTM avec Fine-Tuning et stockage SQLite.
+            Exploitez la puissance des réseaux de neurones LSTM avec Fine-Tuning et stockage persistant.
           </p>
         </div>
         <div className="flex gap-4">
@@ -204,27 +278,57 @@ export default function Home() {
       <div className="grid grid-cols-1 md:grid-cols-6 gap-6">
         
         {/* Prediction Display */}
-        <motion.div className="md:col-span-4 glass-panel p-8 flex flex-col justify-between relative group">
+        <motion.div className="md:col-span-4 glass-panel p-8 flex flex-col gap-8 relative group">
           <div className="absolute top-0 right-0 p-8 opacity-10 group-hover:opacity-20 transition-opacity">
             <Sparkles className="w-24 h-24 text-primary" />
           </div>
-          <div className="z-10">
-            <h2 className="text-2xl font-bold flex items-center gap-2 mb-2">
-              <Target className="w-6 h-6 text-primary" /> Prochaine Vision
-            </h2>
-            <p className="text-slate-400 font-medium">Fenêtre temporelle : {windowLength} tirages</p>
+          
+          <div className="z-10 flex justify-between items-start">
+            <div>
+              <h2 className="text-2xl font-bold flex items-center gap-2 mb-2">
+                <Target className="w-6 h-6 text-primary" /> Vision Prédictive
+              </h2>
+              <p className="text-slate-400 font-medium">Algorithme basé sur {windowLength} tirages</p>
+            </div>
+            <div className="flex flex-col items-end gap-2">
+              <label className="text-[10px] font-black text-slate-500 uppercase">Nombre de Visions</label>
+              <div className="flex items-center gap-3">
+                <input type="range" min="1" max="10" value={numPredictions} onChange={(e) => setNumPredictions(parseInt(e.target.value))} className="w-32 accent-primary" />
+                <span className="text-xl font-black text-primary">{numPredictions}</span>
+              </div>
+            </div>
           </div>
-          <div className="flex justify-center md:justify-start gap-3 md:gap-5 my-12 z-10 flex-wrap">
-            <AnimatePresence mode="wait">
-              {prediction ? prediction.map((num, i) => (
-                <motion.div key={i} initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ type: 'spring', delay: i * 0.1 }} className={`number-ball ${i === 5 ? 'chance' : ''}`}>{num}</motion.div>
-              )) : [1,2,3,4,5,6].map(i => (
-                <div key={i} className={`number-ball opacity-20 border-dashed ${i === 6 ? 'chance' : ''}`}>?</div>
-              ))}
+
+          <div className="z-10 space-y-6 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
+            <AnimatePresence mode="popLayout">
+              {predictions.length > 0 ? predictions.map((pred, pIdx) => (
+                <motion.div 
+                  key={pIdx} 
+                  initial={{ opacity: 0, x: -20 }} 
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: 20 }}
+                  className="flex items-center gap-4 p-4 rounded-2xl bg-slate-900/40 border border-slate-800/40"
+                >
+                  <span className="text-xs font-black text-slate-600 w-8">#{pIdx + 1}</span>
+                  <div className="flex gap-2 md:gap-4 flex-wrap">
+                    {pred.map((num, i) => (
+                      <div key={i} className={`w-10 h-10 md:w-12 md:h-12 flex items-center justify-center rounded-full text-sm md:text-base font-bold ${i === 5 ? 'bg-primary/20 text-primary border border-primary/30 shadow-[0_0_15px_rgba(34,197,94,0.1)]' : 'bg-slate-800 text-white border border-slate-700'}`}>
+                        {num}
+                      </div>
+                    ))}
+                  </div>
+                </motion.div>
+              )) : (
+                <div className="py-12 flex flex-col items-center justify-center border-2 border-dashed border-slate-800/50 rounded-3xl opacity-30">
+                   <Target className="w-12 h-12 mb-4" />
+                   <p className="font-bold uppercase tracking-widest text-xs">Aucune vision calculée</p>
+                </div>
+              )}
             </AnimatePresence>
           </div>
-          <button onClick={handlePredict} disabled={!modelReady || isTraining} className="btn-accent w-full md:w-fit z-10">
-            Calculer <ChevronRight className="w-5 h-5" />
+
+          <button onClick={handlePredict} disabled={!modelReady || isTraining} className="btn-accent w-full md:w-fit z-10 mt-auto">
+            Lancer les Calculs <ChevronRight className="w-5 h-5" />
           </button>
         </motion.div>
 
@@ -233,11 +337,12 @@ export default function Home() {
           <div className="flex justify-between items-start">
             <div>
               <h3 className="font-bold text-lg">Paramètres</h3>
-              <p className="text-slate-400 text-sm">Contrôle du modèle</p>
+              <p className="text-slate-400 text-sm">Gestion des données</p>
             </div>
             <Settings className="text-accent w-5 h-5" />
           </div>
-          <div className="space-y-4">
+          
+          <div className="space-y-6">
             <div className="space-y-2">
               <label className="text-xs font-bold text-slate-500 uppercase">Fenêtre Temporelle (LSTMs)</label>
               <input 
@@ -255,9 +360,26 @@ export default function Home() {
                 <span>24 TIRAGES</span>
               </div>
             </div>
+
+            <div className="space-y-3 pt-4 border-t border-slate-800/50">
+               <label className="text-xs font-bold text-slate-500 uppercase block">Persistance (Multi-Navigateur)</label>
+               <div className="grid grid-cols-2 gap-3">
+                 <button onClick={handleExport} className="btn-ghost !py-2 !text-xs !px-2">
+                    <Database className="w-3.5 h-3.5" /> Exporter JSON
+                 </button>
+                 <label className="btn-ghost !py-2 !text-xs !px-2 cursor-pointer">
+                    <History className="w-3.5 h-3.5" /> Importer
+                    <input type="file" accept=".json" onChange={handleImport} className="hidden" />
+                 </label>
+               </div>
+               <p className="text-[10px] text-slate-500 italic leading-tight">
+                 Utilisez l'export pour transférer vos données SQLite/IndexedDB vers un autre navigateur.
+               </p>
+            </div>
+
             <div className="p-3 rounded-xl bg-slate-900/50 border border-slate-800/50 space-y-1">
               <p className="text-[10px] font-bold text-slate-500 uppercase tracking-tighter">Status Tenseurs</p>
-              <p className="text-xs font-mono text-accent">Active / Optimized</p>
+              <p className="text-xs font-mono text-accent">Optimisé / Active</p>
             </div>
           </div>
         </motion.div>
@@ -310,5 +432,6 @@ export default function Home() {
     </main>
   );
 }
+
 
 
