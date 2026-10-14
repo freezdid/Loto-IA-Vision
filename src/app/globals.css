@@ -3,15 +3,15 @@
 @theme {
   --font-sans: var(--font-dm-sans), "DM Sans", ui-sans-serif, system-ui, sans-serif;
   
-  --color-background: #030712; /* OLED Night Slate */
+  --color-background: #020511; /* Antigravity Deep Void */
   --color-foreground: #f8fafc;
   --color-primary: #0066cc; /* Electric FDJ Royal Blue */
   --color-primary-hover: #0052a3;
   --color-accent: #e1001a; /* FDJ Red for alerts/critical data */
   --color-chance: #ffd100; /* FDJ Gold Chance Ball */
   --color-success: #10b981; /* Emerald Success / Win */
-  --color-panel: #081126; /* Deep Blue Panel */
-  --color-card: #0e1b38; /* Elevated Card */
+  --color-panel: #060e24; /* Deep Space Panel */
+  --color-card: #0a1738; /* Elevated Spatial Card */
   
   --radius-3xl: 1.5rem;
 }
@@ -26,127 +26,230 @@
     color: var(--color-foreground);
     font-family: var(--font-sans);
     min-height: 100vh;
+    overflow-x: hidden;
     background-image: 
-      radial-gradient(ellipse 80% 50% at 50% -20%, rgba(0, 102, 204, 0.15), transparent 70%),
-      radial-gradient(ellipse 60% 40% at 100% 100%, rgba(225, 0, 26, 0.05), transparent 60%),
-      radial-gradient(ellipse 50% 30% at 0% 100%, rgba(255, 209, 0, 0.03), transparent 60%);
+      radial-gradient(circle at 50% -10%, rgba(0, 102, 204, 0.22) 0%, transparent 60%),
+      radial-gradient(circle at 90% 85%, rgba(255, 209, 0, 0.05) 0%, transparent 50%),
+      radial-gradient(circle at 10% 90%, rgba(16, 185, 129, 0.04) 0%, transparent 45%),
+      radial-gradient(circle at 100% 10%, rgba(225, 0, 26, 0.04) 0%, transparent 40%);
     background-attachment: fixed;
   }
 }
 
+/* Antigravity Spatial Keyframe Animations */
+@keyframes antigravity-float {
+  0%, 100% {
+    transform: translateY(0px) rotate(0deg);
+  }
+  50% {
+    transform: translateY(-7px) rotate(0.4deg);
+  }
+}
+
+@keyframes shadow-breathe {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 0.5;
+  }
+  50% {
+    transform: scale(0.82);
+    opacity: 0.25;
+  }
+}
+
+@keyframes aura-glow {
+  0%, 100% {
+    opacity: 0.4;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.8;
+    transform: scale(1.15);
+  }
+}
+
+@keyframes shimmer-sweep {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
+}
+
 @layer components {
-  /* Premium Glass Panel */
+  /* Spatial Perspective Containers */
+  .spatial-stage {
+    perspective: 1200px;
+    transform-style: preserve-3d;
+  }
+
+  /* Weightless Glass Panel */
   .glass-panel {
-    background: linear-gradient(135deg, rgba(8, 17, 38, 0.75) 0%, rgba(14, 27, 56, 0.45) 100%);
-    backdrop-filter: blur(20px);
-    -webkit-backdrop-filter: blur(20px);
+    background: linear-gradient(135deg, rgba(8, 17, 40, 0.78) 0%, rgba(12, 25, 54, 0.42) 100%);
+    backdrop-filter: blur(24px);
+    -webkit-backdrop-filter: blur(24px);
     border: 1px solid rgba(255, 255, 255, 0.08);
     border-radius: 1.5rem;
-    box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.06);
-    transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+    box-shadow: 
+      0 20px 40px -15px rgba(0, 0, 0, 0.6),
+      0 0 1px 1px rgba(255, 255, 255, 0.05),
+      inset 0 1px 0 rgba(255, 255, 255, 0.1);
+    transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.3s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.3s ease;
   }
 
   .glass-panel:hover {
-    border-color: rgba(255, 255, 255, 0.14);
-    box-shadow: 0 20px 40px -15px rgba(0, 85, 164, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+    border-color: rgba(255, 255, 255, 0.16);
+    box-shadow: 
+      0 30px 60px -20px rgba(0, 102, 204, 0.25),
+      0 0 20px rgba(0, 102, 204, 0.1),
+      inset 0 1px 0 rgba(255, 255, 255, 0.15);
+  }
+
+  /* Levitating Antigravity Elements */
+  .levitate-float {
+    animation: antigravity-float 5s ease-in-out infinite;
+    will-change: transform;
+  }
+
+  .levitate-shadow {
+    animation: shadow-breathe 5s ease-in-out infinite;
+    will-change: transform, opacity;
   }
 
   /* Interactive Buttons */
   .btn-primary {
-    @apply inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl font-bold transition-all duration-200 cursor-pointer;
+    @apply inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl font-extrabold transition-all duration-300 cursor-pointer relative overflow-hidden select-none;
     background: linear-gradient(135deg, #0077e6 0%, #0055a4 100%);
     color: #ffffff;
-    box-shadow: 0 4px 16px rgba(0, 102, 204, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.2);
+    box-shadow: 
+      0 6px 20px rgba(0, 102, 204, 0.4),
+      inset 0 1px 0 rgba(255, 255, 255, 0.3);
+  }
+  .btn-primary::after {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+    transform: translateX(-100%);
+    transition: transform 0.6s ease;
+  }
+  .btn-primary:hover:not(:disabled)::after {
+    transform: translateX(100%);
   }
   .btn-primary:hover:not(:disabled) {
-    transform: translateY(-1px);
-    box-shadow: 0 6px 20px rgba(0, 102, 204, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.3);
+    transform: translateY(-2px) scale(1.02);
+    box-shadow: 
+      0 10px 28px rgba(0, 102, 204, 0.55),
+      inset 0 1px 0 rgba(255, 255, 255, 0.4);
   }
   .btn-primary:active:not(:disabled) {
-    transform: translateY(1px);
+    transform: translateY(1px) scale(0.98);
   }
   .btn-primary:disabled {
     @apply opacity-50 cursor-not-allowed;
   }
 
-  .btn-success {
-    @apply inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl font-bold transition-all duration-200 cursor-pointer;
-    background: linear-gradient(135deg, #10b981 0%, #059669 100%);
-    color: #ffffff;
-    box-shadow: 0 4px 16px rgba(16, 185, 129, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.2);
-  }
-  .btn-success:hover:not(:disabled) {
-    transform: translateY(-1px);
-    box-shadow: 0 6px 20px rgba(16, 185, 129, 0.5);
-  }
-
   .btn-ghost {
-    @apply inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl font-medium transition-all duration-200 cursor-pointer;
+    @apply inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl font-bold transition-all duration-200 cursor-pointer select-none;
     background: rgba(255, 255, 255, 0.04);
     color: #cbd5e1;
     border: 1px solid rgba(255, 255, 255, 0.08);
+    backdrop-filter: blur(10px);
   }
   .btn-ghost:hover:not(:disabled) {
-    background: rgba(255, 255, 255, 0.08);
+    background: rgba(255, 255, 255, 0.09);
     color: #ffffff;
-    border-color: rgba(255, 255, 255, 0.16);
+    border-color: rgba(255, 255, 255, 0.18);
+    transform: translateY(-1px);
   }
   .btn-ghost:disabled {
     @apply opacity-40 cursor-not-allowed;
   }
 
-  /* 3D Photorealistic FDJ Loto Balls */
+  /* 3D Photorealistic FDJ Loto Balls with Optical Depth */
   .number-ball {
-    @apply flex items-center justify-center rounded-full font-black text-white relative select-none;
-    width: 3.25rem;
-    height: 3.25rem;
-    font-size: 1.25rem;
-    letter-spacing: -0.03em;
-    background: radial-gradient(circle at 32% 28%, #2997ff 0%, #0066cc 40%, #003d7a 85%, #002244 100%);
+    @apply flex items-center justify-center rounded-full font-black text-white relative select-none cursor-pointer;
+    width: 3.5rem;
+    height: 3.5rem;
+    font-size: 1.35rem;
+    letter-spacing: -0.04em;
+    background: radial-gradient(circle at 30% 25%, #47a6ff 0%, #0066cc 38%, #00366b 80%, #001c38 100%);
     box-shadow: 
-      0 6px 14px rgba(0, 0, 0, 0.5),
-      0 2px 4px rgba(0, 102, 204, 0.4),
-      inset 0 -4px 6px rgba(0, 0, 0, 0.4),
-      inset 0 3px 5px rgba(255, 255, 255, 0.6);
-    border: 1px solid rgba(255, 255, 255, 0.2);
-    transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+      0 10px 20px -3px rgba(0, 0, 0, 0.6),
+      0 4px 12px rgba(0, 102, 204, 0.45),
+      inset 0 -5px 8px rgba(0, 0, 0, 0.45),
+      inset 0 4px 6px rgba(255, 255, 255, 0.65);
+    border: 1px solid rgba(255, 255, 255, 0.25);
+    transform-style: preserve-3d;
+    transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.25s ease;
   }
 
   .number-ball:hover {
-    transform: scale(1.08) translateY(-2px);
-  }
-
-  /* Photorealistic 3D Gold Chance Ball */
-  .number-ball.chance {
-    color: #1e1b04;
-    background: radial-gradient(circle at 32% 28%, #fff3a0 0%, #ffd100 40%, #e6a800 80%, #996300 100%);
+    transform: translateY(-6px) scale(1.12);
     box-shadow: 
-      0 6px 16px rgba(0, 0, 0, 0.5),
-      0 0 20px rgba(255, 209, 0, 0.4),
-      inset 0 -4px 6px rgba(153, 99, 0, 0.5),
-      inset 0 3px 5px rgba(255, 255, 255, 0.85);
-    border: 1px solid rgba(255, 235, 150, 0.4);
+      0 16px 28px -4px rgba(0, 0, 0, 0.7),
+      0 0 24px rgba(0, 102, 204, 0.6),
+      inset 0 -5px 8px rgba(0, 0, 0, 0.45),
+      inset 0 4px 6px rgba(255, 255, 255, 0.8);
   }
 
-  /* Compact variant for tables and history */
+  /* 3D Gold Chance Ball */
+  .number-ball.chance {
+    color: #1a1500;
+    background: radial-gradient(circle at 30% 25%, #fff6b3 0%, #ffd100 38%, #e09900 80%, #805200 100%);
+    box-shadow: 
+      0 10px 22px -3px rgba(0, 0, 0, 0.6),
+      0 0 25px rgba(255, 209, 0, 0.5),
+      inset 0 -5px 8px rgba(128, 82, 0, 0.55),
+      inset 0 4px 6px rgba(255, 255, 255, 0.9);
+    border: 1px solid rgba(255, 240, 170, 0.45);
+  }
+
+  .number-ball.chance:hover {
+    transform: translateY(-6px) scale(1.12);
+    box-shadow: 
+      0 16px 30px -4px rgba(0, 0, 0, 0.7),
+      0 0 35px rgba(255, 209, 0, 0.75),
+      inset 0 -5px 8px rgba(128, 82, 0, 0.55),
+      inset 0 4px 6px rgba(255, 255, 255, 1);
+  }
+
+  /* Compact variant for lists & history */
   .number-ball-sm {
     @apply flex items-center justify-center rounded-full font-black text-white relative select-none;
-    width: 2.25rem;
-    height: 2.25rem;
-    font-size: 0.85rem;
+    width: 2.35rem;
+    height: 2.35rem;
+    font-size: 0.9rem;
     letter-spacing: -0.02em;
-    background: radial-gradient(circle at 32% 28%, #2997ff 0%, #0066cc 45%, #003060 100%);
-    box-shadow: 0 3px 8px rgba(0, 0, 0, 0.4), inset 0 2px 3px rgba(255, 255, 255, 0.5);
-    border: 1px solid rgba(255, 255, 255, 0.15);
+    background: radial-gradient(circle at 30% 25%, #47a6ff 0%, #0066cc 45%, #002b54 100%);
+    box-shadow: 
+      0 4px 10px rgba(0, 0, 0, 0.45),
+      0 2px 5px rgba(0, 102, 204, 0.3),
+      inset 0 2px 3px rgba(255, 255, 255, 0.5);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    transition: transform 0.2s ease;
   }
 
   .number-ball-sm.chance {
-    color: #1e1b04;
-    background: radial-gradient(circle at 32% 28%, #fff3a0 0%, #ffd100 45%, #b37400 100%);
-    box-shadow: 0 3px 8px rgba(0, 0, 0, 0.4), 0 0 10px rgba(255, 209, 0, 0.3), inset 0 2px 3px rgba(255, 255, 255, 0.7);
+    color: #1a1500;
+    background: radial-gradient(circle at 30% 25%, #fff6b3 0%, #ffd100 45%, #a66a00 100%);
+    box-shadow: 
+      0 4px 10px rgba(0, 0, 0, 0.45),
+      0 0 14px rgba(255, 209, 0, 0.4),
+      inset 0 2px 3px rgba(255, 255, 255, 0.75);
+    border: 1px solid rgba(255, 240, 170, 0.35);
   }
 
-  /* Custom scrollbar */
+  /* Ball Socket / Pedestal Shadow */
+  .ball-pedestal {
+    width: 2.5rem;
+    height: 0.65rem;
+    background: radial-gradient(ellipse at center, rgba(0, 0, 0, 0.7) 0%, transparent 75%);
+    border-radius: 50%;
+  }
+
+  /* Custom Sleek Scrollbar */
   .custom-scrollbar::-webkit-scrollbar {
     width: 6px;
     height: 6px;
@@ -159,6 +262,6 @@
     border-radius: 9999px;
   }
   .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-    background: rgba(255, 255, 255, 0.22);
+    background: rgba(255, 255, 255, 0.25);
   }
 }
