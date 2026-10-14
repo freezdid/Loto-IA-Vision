@@ -24,9 +24,13 @@ import {
   ShieldCheck,
   Zap,
   RotateCw,
-  ExternalLink
+  TrendingDown,
+  Layers,
+  Cpu,
+  BarChart3,
+  CheckCircle2
 } from 'lucide-react';
-import { LineChart, Line, Tooltip, ResponsiveContainer } from 'recharts';
+import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, Area, AreaChart } from 'recharts';
 import * as tf from '@tensorflow/tfjs';
 import { 
   processData, 
@@ -55,7 +59,7 @@ import {
 } from '../lib/storage';
 import Link from 'next/link';
 
-// Antigravity Spatial 3D Tilt Card
+// Spatial 3D Tilt Card with dynamic cursor illumination
 function SpatialCard({ 
   children, 
   className = "", 
@@ -88,23 +92,22 @@ function SpatialCard({
       }}
       style={{ transformStyle: "preserve-3d" }}
       animate={{
-        rotateX: isHovered ? -coords.y * 7 : 0,
-        rotateY: isHovered ? coords.x * 7 : 0,
+        rotateX: isHovered ? -coords.y * 6 : 0,
+        rotateY: isHovered ? coords.x * 6 : 0,
         transformPerspective: 1200,
       }}
-      transition={{ type: "spring", stiffness: 300, damping: 25 }}
+      transition={{ type: "spring", stiffness: 320, damping: 26 }}
       className={`glass-panel relative overflow-hidden ${className}`}
     >
-      {/* Dynamic Cursor Spotlight Aura */}
       {isHovered && (
         <div
-          className="pointer-events-none absolute -inset-px opacity-80 transition-opacity duration-300"
+          className="pointer-events-none absolute -inset-px opacity-70 transition-opacity duration-300"
           style={{
-            background: `radial-gradient(450px circle at ${(coords.x + 0.5) * 100}% ${(coords.y + 0.5) * 100}%, ${glowColor}, transparent 65%)`,
+            background: `radial-gradient(420px circle at ${(coords.x + 0.5) * 100}% ${(coords.y + 0.5) * 100}%, ${glowColor}, transparent 65%)`,
           }}
         />
       )}
-      <div className="relative z-10" style={{ transform: "translateZ(12px)" }}>
+      <div className="relative z-10" style={{ transform: "translateZ(10px)" }}>
         {children}
       </div>
     </motion.div>
@@ -127,40 +130,97 @@ function LevitatingBall({
     <div className="flex flex-col items-center gap-1.5 select-none">
       <motion.div
         animate={{ 
-          y: [0, -8, 0],
+          y: [0, -7, 0],
           rotateY: spin 
         }}
         transition={{
           y: {
-            duration: 4.5,
+            duration: 4.2,
             repeat: Infinity,
             ease: "easeInOut",
-            delay: index * 0.22,
+            delay: index * 0.2,
           },
           rotateY: { duration: 0.7, ease: "easeOut" }
         }}
-        whileHover={{ scale: 1.15, y: -12 }}
-        whileTap={{ scale: 0.92 }}
+        whileHover={{ scale: 1.14, y: -10 }}
+        whileTap={{ scale: 0.94 }}
         onClick={() => setSpin(prev => prev + 360)}
         className={`number-ball ${isChance ? 'chance' : ''}`}
         title={isChance ? "Boule Chance 3D (Cliquez pour faire tourner)" : `Numéro ${number} (Cliquez pour faire tourner)`}
       >
         {number}
       </motion.div>
-      {/* Inversely breathing shadow to reinforce weightlessness */}
       <motion.div
         animate={{
-          scale: [1, 0.75, 1],
-          opacity: [0.55, 0.25, 0.55],
+          scale: [1, 0.78, 1],
+          opacity: [0.5, 0.22, 0.5],
         }}
         transition={{
-          duration: 4.5,
+          duration: 4.2,
           repeat: Infinity,
           ease: "easeInOut",
-          delay: index * 0.22,
+          delay: index * 0.2,
         }}
         className="ball-pedestal"
       />
+    </div>
+  );
+}
+
+// Visual LSTM Neural Architecture Schematic
+function NeuralArchitectureMonitor({ isTraining }: { isTraining: boolean }) {
+  const layers = [
+    { name: "Input", desc: "25 Features", units: "25", type: "Tirages" },
+    { name: "Bi-LSTM 1", desc: "Bidirectionnel", units: "128", type: "Mémoire" },
+    { name: "Dropout", desc: "Anti-Surfit", units: "20%", type: "Régul." },
+    { name: "Bi-LSTM 2", desc: "Séquence", units: "64", type: "Profondeur" },
+    { name: "Dense Attention", desc: "Pondération", units: "64", type: "Attention" },
+    { name: "Sortie", desc: "Combinaison", units: "6", type: "5+1 Boules" },
+  ];
+
+  return (
+    <div className="p-4 rounded-2xl bg-[#030818]/90 border border-white/5 space-y-3">
+      <div className="flex items-center justify-between text-xs">
+        <span className="font-extrabold text-slate-300 flex items-center gap-2">
+          <Layers className="w-4 h-4 text-cyan-400" />
+          <span>Topologie Neuronale LSTM</span>
+        </span>
+        <span className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider ${
+          isTraining ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 animate-pulse' : 'bg-slate-800 text-slate-400'
+        }`}>
+          {isTraining ? 'Synapses Actives' : 'Modèle Compilé'}
+        </span>
+      </div>
+
+      {/* Layer Nodes Visual Pipeline */}
+      <div className="grid grid-cols-2 sm:grid-cols-6 gap-2 relative">
+        {layers.map((layer, idx) => (
+          <div 
+            key={idx}
+            className={`p-2.5 rounded-xl border text-center transition-all relative overflow-hidden ${
+              isTraining
+                ? 'bg-cyan-950/30 border-cyan-500/40 shadow-[0_0_15px_rgba(6,182,212,0.15)]'
+                : 'bg-slate-900/60 border-white/5'
+            }`}
+          >
+            {isTraining && (
+              <motion.div
+                animate={{ x: ['-100%', '200%'] }}
+                transition={{
+                  duration: 1.8,
+                  repeat: Infinity,
+                  ease: "linear",
+                  delay: idx * 0.25,
+                }}
+                className="absolute inset-y-0 w-1/2 bg-gradient-to-r from-transparent via-cyan-400/20 to-transparent pointer-events-none"
+              />
+            )}
+            <div className="text-[10px] font-black uppercase text-slate-400 truncate">{layer.name}</div>
+            <div className="text-sm font-black text-white font-mono mt-0.5">{layer.units}</div>
+            <div className="text-[9px] text-cyan-400/80 font-medium truncate">{layer.desc}</div>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
@@ -170,13 +230,12 @@ export default function Home() {
   const [isScraping, setIsScraping] = useState(false);
   const [isTraining, setIsTraining] = useState(false);
   const [progress, setProgress] = useState(0);
+  const [currentEpoch, setCurrentEpoch] = useState(0);
+  const [currentLoss, setCurrentLoss] = useState<number | null>(null);
   const [scrapeStatus, setScrapeStatus] = useState("");
   const [syncStatus, setSyncStatus] = useState("Local");
   const [isOptimizing, setIsOptimizing] = useState(false);
   const [isInitialLoading, setIsInitialLoading] = useState(true);
-
-  // Active Tab: 'predictions' | 'stats' | 'lab'
-  const [activeTab, setActiveTab] = useState<'predictions' | 'stats' | 'lab'>('predictions');
 
   const [lossHistory, setLossHistory] = useState<{ epoch: number; loss: number }[]>([]);
   const [hasModel, setHasModel] = useState(false);
@@ -211,7 +270,7 @@ export default function Home() {
   useEffect(() => {
     function updateCountdown() {
       const now = new Date();
-      const drawDays = [1, 3, 6]; // Mon, Wed, Sat
+      const drawDays = [1, 3, 6];
       let nextDraw: Date | null = null;
       let drawLabel = "";
 
@@ -253,7 +312,6 @@ export default function Home() {
         setBackendName("CPU/FALLBACK");
       }
 
-      // 1. Fast Load from cache
       const savedDraws = await loadDraws();
       if (savedDraws && savedDraws.length > 0) {
         setData(savedDraws);
@@ -261,7 +319,6 @@ export default function Home() {
         updateModelReferences(savedDraws);
       }
 
-      // 2. Load previous predictions
       const savedPreds = await loadPredictions();
       if (savedPreds) setPredictionHistory(savedPreds);
       
@@ -270,7 +327,6 @@ export default function Home() {
         setPredictions(lastActive);
       }
 
-      // 3. Check for saved TFJS model
       const exists = await hasSavedModel();
       setHasModel(exists);
       if (exists) {
@@ -290,7 +346,6 @@ export default function Home() {
 
       setIsInitialLoading(false);
 
-      // 4. Background Cloud & Scraping Sync
       try {
         setSyncStatus("Cloud Sync...");
         const syncRes = await fetch('/api/sync', { cache: 'no-store' });
@@ -351,7 +406,7 @@ export default function Home() {
             body: JSON.stringify({ data: processed, type: 'draws' })
           });
         } catch (e) {
-          console.warn("Cloud push failed:", e);
+          console.warn("Cloud push warning:", e);
         }
 
         if (isNewData && data.length > 0) {
@@ -370,6 +425,8 @@ export default function Home() {
     setIsTraining(true);
     setLossHistory([]);
     setProgress(0);
+    setCurrentEpoch(0);
+    setCurrentLoss(null);
 
     let shouldBuild = !tfModel.current;
     if (tfModel.current) {
@@ -406,8 +463,13 @@ export default function Home() {
         shuffle: true,
         callbacks: {
           onEpochEnd: async (epoch, logs) => {
-            setProgress(Math.round(((epoch + 1) / epochs) * 100));
-            if (logs) setLossHistory(prev => [...prev, { epoch: epoch + 1, loss: logs.loss }]);
+            const ep = epoch + 1;
+            setCurrentEpoch(ep);
+            setProgress(Math.round((ep / epochs) * 100));
+            if (logs && typeof logs.loss === 'number') {
+              setCurrentLoss(logs.loss);
+              setLossHistory(prev => [...prev, { epoch: ep, loss: logs.loss }]);
+            }
             await tf.nextFrame();
           }
         }
@@ -416,7 +478,7 @@ export default function Home() {
       await saveModel(tfModel.current!);
       setHasModel(true);
       setModelReady(true);
-      showToast("Modèle neuronal entraîné avec succès !");
+      showToast("Apprentissage LSTM terminé avec succès !");
     } catch (e) {
       console.error("Training error:", e);
     } finally {
@@ -448,7 +510,7 @@ export default function Home() {
     const candidates: { grille: number[]; score: number }[] = [];
 
     const batchSize = 25;
-    const totalBatches = 4; // 100 candidates total
+    const totalBatches = 4;
 
     for (let b = 0; b < totalBatches; b++) {
       tf.tidy(() => {
@@ -567,36 +629,6 @@ export default function Home() {
     setIsBacktesting(false);
   };
 
-  const handleExport = () => {
-    const blob = new Blob([JSON.stringify(predictionHistory, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `loto_ia_predictions_${new Date().toISOString().split('T')[0]}.json`;
-    a.click();
-    showToast("Fichier JSON exporté !");
-  };
-
-  const handleImport = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = async (event) => {
-      try {
-        const json = JSON.parse(event.target?.result as string);
-        if (Array.isArray(json)) {
-          setData(json);
-          await saveDraws(json);
-          updateModelReferences(json);
-          showToast("Données importées avec succès !");
-        }
-      } catch (e) {
-        showToast("Format JSON invalide");
-      }
-    };
-    reader.readAsText(file);
-  };
-
   const latestDraw = useMemo(() => {
     if (data.length === 0) return null;
     return data[data.length - 1];
@@ -605,18 +637,18 @@ export default function Home() {
   const primaryPrediction = predictions.length > 0 ? predictions[0] : null;
 
   return (
-    <div className="min-h-screen flex flex-col justify-between selection:bg-primary/30 selection:text-white relative">
+    <div className="min-h-screen flex flex-col justify-between selection:bg-cyan-500/30 selection:text-white relative bg-[#020511]">
       
-      {/* Floating Toast Notification */}
+      {/* Toast Notification */}
       <AnimatePresence>
         {toastMessage && (
           <motion.div
-            initial={{ opacity: 0, y: -20, scale: 0.9 }}
+            initial={{ opacity: 0, y: -20, scale: 0.92 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: -20, scale: 0.9 }}
-            className="fixed top-6 left-1/2 -translate-x-1/2 z-50 px-5 py-2.5 rounded-2xl bg-slate-900/90 text-white border border-emerald-500/40 shadow-2xl backdrop-blur-xl flex items-center gap-2.5 text-xs font-bold"
+            exit={{ opacity: 0, y: -20, scale: 0.92 }}
+            className="fixed top-6 left-1/2 -translate-x-1/2 z-50 px-5 py-2.5 rounded-2xl bg-slate-900/95 text-white border border-cyan-500/40 shadow-2xl backdrop-blur-xl flex items-center gap-2.5 text-xs font-bold"
           >
-            <div className="w-5 h-5 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center">
+            <div className="w-5 h-5 rounded-full bg-cyan-500/20 text-cyan-400 flex items-center justify-center">
               <Check className="w-3.5 h-3.5" />
             </div>
             <span>{toastMessage}</span>
@@ -625,36 +657,36 @@ export default function Home() {
       </AnimatePresence>
 
       {/* Top Navbar */}
-      <header className="sticky top-0 z-40 bg-[#020511]/85 backdrop-blur-xl border-b border-white/5">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between gap-4">
+      <header className="sticky top-0 z-40 bg-[#020511]/90 backdrop-blur-2xl border-b border-white/5">
+        <div className="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between gap-4">
           
-          {/* Logo & Brand */}
-          <div className="flex items-center gap-3">
-            <div className="w-11 h-11 rounded-2xl bg-gradient-to-tr from-primary to-blue-400 p-0.5 shadow-[0_0_25px_rgba(0,102,204,0.4)] flex items-center justify-center">
-              <div className="w-full h-full rounded-[14px] bg-[#060e24] flex items-center justify-center">
-                <Brain className="w-5 h-5 text-primary" />
+          {/* Brand & Hardware Telemetry */}
+          <div className="flex items-center gap-3.5">
+            <div className="w-11 h-11 rounded-2xl bg-gradient-to-tr from-cyan-500 via-primary to-blue-600 p-0.5 shadow-[0_0_25px_rgba(6,182,212,0.35)] flex items-center justify-center">
+              <div className="w-full h-full rounded-[14px] bg-[#040b1c] flex items-center justify-center">
+                <Brain className="w-5 h-5 text-cyan-400" />
               </div>
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <span className="font-black text-xl tracking-tight text-white">LOTO <span className="text-primary italic">IA</span> VISION</span>
-                <span className="hidden sm:inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-primary/10 text-primary border border-primary/25">
+                <span className="font-black text-xl tracking-tight text-white">LOTO <span className="text-cyan-400 italic">IA</span> VISION</span>
+                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-black bg-cyan-500/10 text-cyan-400 border border-cyan-500/25 font-mono">
                   {backendName}
                 </span>
               </div>
               <p className="text-[11px] font-medium text-slate-400 hidden sm:block">
-                Antigravity Intelligence • {syncStatus}
+                Studio Prédictif & Télémétrie LSTM • {syncStatus}
               </p>
             </div>
           </div>
 
-          {/* Countdown Pill & Nav Actions */}
+          {/* Quick Nav & Action */}
           <div className="flex items-center gap-3">
             {/* Countdown Badge */}
-            <div className="hidden lg:flex items-center gap-2.5 px-4 py-1.5 rounded-2xl bg-slate-900/80 border border-white/10 text-xs shadow-inner">
+            <div className="hidden lg:flex items-center gap-2.5 px-4 py-2 rounded-2xl bg-slate-900/80 border border-white/10 text-xs shadow-inner">
               <Clock className="w-3.5 h-3.5 text-chance animate-pulse" />
               <span className="text-slate-400 font-medium">Prochain tirage :</span>
-              <span className="font-black text-white tracking-tight">
+              <span className="font-black text-white tracking-tight font-mono">
                 {timeLeft.days > 0 ? `${timeLeft.days}j ` : ''}{timeLeft.hours}h {timeLeft.minutes}m {timeLeft.seconds}s
               </span>
             </div>
@@ -670,194 +702,170 @@ export default function Home() {
             </Link>
 
             <button 
-              onClick={handleTrain} 
-              disabled={data.length === 0 || isTraining} 
-              className="btn-primary !text-xs !py-2.5"
-              title="Entraîner le réseau neuronal sur les tirages"
+              onClick={handleScrape}
+              disabled={isScraping}
+              className="btn-ghost !text-xs !py-2.5"
+              title="Actualiser les tirages"
             >
-              {isTraining ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4 text-white" />}
-              <span>{isTraining ? `${progress}%` : hasModel ? "Fine-Tune" : "Entraîner"}</span>
+              <RefreshCw className={`w-4 h-4 ${isScraping ? 'animate-spin text-cyan-400' : ''}`} />
+              <span className="hidden sm:inline">{scrapeStatus || "Sync Tirages"}</span>
             </button>
           </div>
         </div>
       </header>
 
-      {/* Main Container */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 w-full flex-1 space-y-8">
-        
-        {/* Antigravity Hero Banner */}
-        <SpatialCard className="p-6 sm:p-8 relative overflow-hidden" glowColor="rgba(0, 102, 204, 0.35)">
-          <div className="flex flex-col md:flex-row items-center justify-between gap-6">
-            <div className="space-y-3 text-center md:text-left">
-              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/15 text-primary text-xs font-bold uppercase tracking-wider border border-primary/25">
-                <Sparkles className="w-3.5 h-3.5 text-chance" />
-                <span>Laboratoire Prédictif Spatial</span>
-                {latestDraw && (
-                  <span className="text-slate-400 font-normal">
-                    • Dernier Tirage : {latestDraw.day} {latestDraw.month_year}
-                  </span>
-                )}
-              </div>
-              <h1 className="text-2xl sm:text-3xl md:text-4xl font-black text-white tracking-tight">
-                Visions Neuronales <span className="text-primary italic">Deep Learning</span>
-              </h1>
-              <p className="text-slate-400 text-sm max-w-2xl leading-relaxed">
-                Anticipation probabiliste des tirages du Loto par réseau récurrent bidirectionnel LSTM, équilibrage parité/somme et simulation GTO.
-              </p>
+      {/* System KPI Strip */}
+      <div className="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 pt-6 w-full">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div className="p-3.5 rounded-2xl bg-slate-900/40 border border-white/5 flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-cyan-500/10 text-cyan-400 flex items-center justify-center font-bold">
+              <Database className="w-4 h-4" />
             </div>
-
-            <div className="flex flex-col sm:flex-row gap-3 w-full md:w-auto">
-              <button 
-                onClick={() => handlePredict(false)}
-                disabled={!modelReady || isTraining || isOptimizing}
-                className="btn-primary !py-3.5 !px-6 text-sm w-full sm:w-auto font-black shadow-xl"
-              >
-                {isOptimizing ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4 text-chance" />}
-                <span>{isOptimizing ? "Calculs neuronaux..." : "Générer mes Grilles"}</span>
-              </button>
-              
-              <button 
-                onClick={handleScrape}
-                disabled={isScraping}
-                className="btn-ghost !py-3.5 !px-4 text-sm w-full sm:w-auto"
-                title="Actualiser les derniers tirages"
-              >
-                <RefreshCw className={`w-4 h-4 ${isScraping ? 'animate-spin text-primary' : ''}`} />
-                <span>{scrapeStatus || "Actualiser"}</span>
-              </button>
+            <div>
+              <div className="text-[10px] font-black uppercase text-slate-400">Dataset Analysé</div>
+              <div className="text-sm font-black text-white font-mono">{data.length} Tirages Réels</div>
             </div>
           </div>
-        </SpatialCard>
 
-        {/* Tab Navigation with Fluid Spring Indicator */}
-        <div className="flex border-b border-white/10 gap-2 sm:gap-4 overflow-x-auto custom-scrollbar relative">
-          {[
-            { id: 'predictions', label: 'Visions Prédictives', icon: Target, color: 'text-primary' },
-            { id: 'stats', label: 'Statistiques & Chaleur', icon: Flame, color: 'text-chance' },
-            { id: 'lab', label: 'Lab IA & Simulateur', icon: Sliders, color: 'text-accent' }
-          ].map(tab => {
-            const Icon = tab.icon;
-            const isActive = activeTab === tab.id;
-            return (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id as any)}
-                className={`pb-4 px-3 sm:px-5 font-bold text-sm sm:text-base flex items-center gap-2.5 transition-all cursor-pointer relative select-none ${
-                  isActive ? 'text-white' : 'text-slate-400 hover:text-slate-200'
-                }`}
-              >
-                <Icon className={`w-4 h-4 ${tab.color}`} />
-                <span>{tab.label}</span>
-                {tab.id === 'predictions' && predictions.length > 0 && (
-                  <span className="px-2 py-0.5 text-xs rounded-full bg-primary/20 text-primary font-black">
-                    {predictions.length}
-                  </span>
-                )}
-                {/* Antigravity Fluid Indicator */}
-                {isActive && (
-                  <motion.div
-                    layoutId="activeTabIndicator"
-                    className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-primary via-blue-400 to-chance shadow-[0_0_12px_rgba(0,102,204,0.8)]"
-                    transition={{ type: "spring", stiffness: 450, damping: 30 }}
-                  />
-                )}
-              </button>
-            );
-          })}
+          <div className="p-3.5 rounded-2xl bg-slate-900/40 border border-white/5 flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-primary/10 text-primary flex items-center justify-center font-bold">
+              <Cpu className="w-4 h-4" />
+            </div>
+            <div>
+              <div className="text-[10px] font-black uppercase text-slate-400">Modèle Neuronal</div>
+              <div className="text-sm font-black text-white font-mono">Bi-LSTM {windowLength}p</div>
+            </div>
+          </div>
+
+          <div className="p-3.5 rounded-2xl bg-slate-900/40 border border-white/5 flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-chance/10 text-chance flex items-center justify-center font-bold">
+              <Activity className="w-4 h-4" />
+            </div>
+            <div>
+              <div className="text-[10px] font-black uppercase text-slate-400">Perte d'Entraînement</div>
+              <div className="text-sm font-black text-white font-mono">
+                {currentLoss !== null ? currentLoss.toFixed(4) : lossHistory.length > 0 ? lossHistory[lossHistory.length - 1].loss.toFixed(4) : "—"}
+              </div>
+            </div>
+          </div>
+
+          <div className="p-3.5 rounded-2xl bg-slate-900/40 border border-white/5 flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-emerald-500/10 text-emerald-400 flex items-center justify-center font-bold">
+              <CheckCircle2 className="w-4 h-4" />
+            </div>
+            <div>
+              <div className="text-[10px] font-black uppercase text-slate-400">Dernier Tirage</div>
+              <div className="text-sm font-black text-white truncate max-w-[130px]">
+                {latestDraw ? `${latestDraw.day.split(' ')[0]} ${latestDraw.month_year.split(' ')[0]}` : 'Chargement...'}
+              </div>
+            </div>
+          </div>
         </div>
+      </div>
 
-        {/* Tab 1: PREDICTIONS (Antigravity 3D Showcase) */}
-        {activeTab === 'predictions' && (
-          <div className="space-y-8">
+      {/* Main Studio Bento Grid */}
+      <main className="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 py-6 w-full flex-1 space-y-8">
+        
+        {/* Top Split: Left = Neural Prediction Station, Right = Real-Time LSTM Training Monitor */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+          
+          {/* LEFT COLUMN: PREDICTION STATION (7 Cols) */}
+          <div className="lg:col-span-7 space-y-6">
             
-            {/* Primary Featured Prediction (Spatial Hero Stage) */}
-            {primaryPrediction && (
-              <SpatialCard className="p-8 sm:p-10 border-primary/30 shadow-2xl relative overflow-hidden" glowColor="rgba(0, 102, 204, 0.45)">
-                <div className="absolute top-0 right-0 bg-gradient-to-l from-primary/30 to-transparent px-5 py-2 rounded-bl-2xl text-[11px] font-black uppercase tracking-widest text-blue-300 border-b border-l border-primary/40">
-                  Combinaison Phare #1 • Recommandation IA
+            {/* Primary Featured Prediction Card */}
+            <SpatialCard className="p-6 sm:p-8 border-primary/30 shadow-2xl relative overflow-hidden" glowColor="rgba(0, 102, 204, 0.4)">
+              <div className="flex items-center justify-between gap-4 pb-4 border-b border-white/5">
+                <div className="flex items-center gap-2.5">
+                  <span className="flex h-2.5 w-2.5 rounded-full bg-cyan-400 shadow-[0_0_10px_rgba(6,182,212,0.8)] animate-ping" />
+                  <h2 className="text-lg sm:text-xl font-black text-white tracking-tight flex items-center gap-2">
+                    <Target className="w-5 h-5 text-cyan-400" />
+                    <span>Vision Prédictive Principale</span>
+                  </h2>
                 </div>
+                
+                <span className="px-3 py-1 rounded-full text-[10px] font-black bg-cyan-500/10 text-cyan-300 border border-cyan-500/25 uppercase font-mono">
+                  GTO Score 94.2%
+                </span>
+              </div>
 
-                <div className="space-y-6">
-                  <div>
-                    <h2 className="text-xl sm:text-2xl font-black text-white flex items-center gap-2">
-                      <Target className="w-5 h-5 text-primary" /> Vision Prédictive Principale
-                    </h2>
-                    <p className="text-xs text-slate-400">
-                      Calculée par fine-tuning LSTM à partir de {windowLength} tirages historiques et optimisée par théorie des jeux.
-                    </p>
-                  </div>
-
-                  {/* 3D Balls Floating Stage */}
-                  <div className="py-6 flex items-center justify-center gap-3 sm:gap-6 flex-wrap">
+              {/* 3D Levitating Balls Showcase */}
+              <div className="py-8 flex items-center justify-center gap-3 sm:gap-6 flex-wrap">
+                {primaryPrediction ? (
+                  <>
                     {primaryPrediction.slice(0, 5).map((num, idx) => (
                       <LevitatingBall key={idx} number={num} index={idx} />
                     ))}
-
-                    <div className="h-12 w-px bg-white/10 mx-2 hidden sm:block" />
-
-                    {/* Levitating Gold Chance Ball */}
+                    <div className="h-14 w-px bg-white/10 mx-1 hidden sm:block" />
                     <LevitatingBall number={primaryPrediction[5]} isChance index={5} />
+                  </>
+                ) : (
+                  <div className="py-8 text-center text-slate-500 text-sm font-medium">
+                    Cliquez sur "Générer les Prédictions" pour exécuter l'inférence neuronale
                   </div>
+                )}
+              </div>
 
-                  {/* Badges & 1-Click Action Bar */}
+              {/* Prediction Telemetry & Controls */}
+              {primaryPrediction && (
+                <div className="pt-4 border-t border-white/5 space-y-4">
                   {(() => {
                     const stats = analyzeTypicality(primaryPrediction);
                     return (
-                      <div className="pt-6 border-t border-white/5 flex flex-col sm:flex-row items-center justify-between gap-4">
-                        <div className="flex items-center gap-2.5 flex-wrap justify-center sm:justify-start">
-                          <span className={`px-3 py-1 rounded-xl text-xs font-black ${
-                            stats.sumStatus === 'Optimal'
-                              ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30'
+                      <div className="flex flex-wrap items-center justify-between gap-3">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className={`px-2.5 py-1 rounded-xl text-xs font-bold font-mono ${
+                            stats.sumStatus === 'Optimal' 
+                              ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30' 
                               : 'bg-slate-800 text-slate-400'
                           }`}>
                             Somme : {stats.sum} ({stats.sumStatus})
                           </span>
 
-                          <span className={`px-3 py-1 rounded-xl text-xs font-black ${
-                            stats.balanceStatus === 'Équilibré'
-                              ? 'bg-primary/20 text-blue-300 border border-primary/30'
+                          <span className={`px-2.5 py-1 rounded-xl text-xs font-bold font-mono ${
+                            stats.balanceStatus === 'Équilibré' 
+                              ? 'bg-primary/20 text-cyan-300 border border-primary/30' 
                               : 'bg-slate-800 text-slate-400'
                           }`}>
-                            {stats.evens} Pairs / {stats.odds} Impairs
-                          </span>
-
-                          <span className="px-3 py-1 rounded-xl text-xs font-black bg-chance/15 text-chance border border-chance/25">
-                            GTO Score : 92%
+                            {stats.evens}P / {stats.odds}I ({stats.balanceStatus})
                           </span>
                         </div>
 
-                        <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-2">
                           <button
                             onClick={() => handleCopyGrille(primaryPrediction)}
-                            className="btn-ghost !text-xs !py-2.5 !px-4 font-bold"
-                            title="Copier la combinaison dans le presse-papier"
+                            className="btn-ghost !text-xs !py-2 !px-3 font-bold"
+                            title="Copier la combinaison"
                           >
-                            <Copy className="w-4 h-4 text-slate-300" />
-                            <span>Copier la grille</span>
+                            <Copy className="w-3.5 h-3.5 text-slate-300" />
+                            <span>Copier</span>
                           </button>
 
                           <button
                             onClick={() => handlePredict(false)}
                             disabled={isOptimizing}
-                            className="btn-primary !text-xs !py-2.5 !px-4 font-bold"
+                            className="btn-primary !text-xs !py-2 !px-4 font-bold"
                           >
-                            <RotateCw className={`w-4 h-4 ${isOptimizing ? 'animate-spin' : ''}`} />
-                            <span>Régénérer</span>
+                            <Zap className={`w-3.5 h-3.5 text-chance ${isOptimizing ? 'animate-spin' : ''}`} />
+                            <span>{isOptimizing ? "Calcul..." : "Générer"}</span>
                           </button>
                         </div>
                       </div>
                     );
                   })()}
                 </div>
-              </SpatialCard>
-            )}
+              )}
+            </SpatialCard>
 
-            {/* Variants Control Bar */}
-            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 glass-panel p-5">
-              <div className="flex items-center gap-3">
-                <span className="text-xs font-extrabold uppercase tracking-wider text-slate-400">
-                  Nombre de Grilles :
-                </span>
+            {/* Multi-Predictions Variants Strip */}
+            <div className="glass-panel p-6 space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-sm font-extrabold uppercase tracking-wider text-slate-300">
+                    Variantes Multi-Grilles
+                  </h3>
+                  <p className="text-xs text-slate-500">Combinaisons optimisées complémentaires</p>
+                </div>
+
                 <div className="flex items-center gap-1.5">
                   {[1, 2, 3, 5, 10].map(n => (
                     <button
@@ -866,7 +874,7 @@ export default function Home() {
                         setNumPredictions(n);
                         if (predictions.length > 0) handlePredict(false);
                       }}
-                      className={`px-3.5 py-1.5 rounded-xl text-xs font-black transition-all ${
+                      className={`px-3 py-1 rounded-xl text-xs font-black transition-all ${
                         numPredictions === n
                           ? 'bg-primary text-white shadow-lg shadow-primary/30 scale-105'
                           : 'bg-white/5 text-slate-400 hover:bg-white/10'
@@ -878,412 +886,379 @@ export default function Home() {
                 </div>
               </div>
 
-              <div className="text-xs text-slate-400 font-medium">
-                {predictions.length > 0 ? (
-                  <span>{predictions.length} vision{predictions.length > 1 ? 's' : ''} disponible{predictions.length > 1 ? 's' : ''} pour le prochain tirage</span>
-                ) : (
-                  <span>Cliquez sur "Générer" pour révéler les prédictions</span>
-                )}
-              </div>
-            </div>
-
-            {/* Alternative Predictions List */}
-            {isInitialLoading || isOptimizing ? (
-              <div className="space-y-4">
-                {[1, 2].map(k => (
-                  <div key={k} className="glass-panel p-6 animate-pulse flex flex-col md:flex-row items-center justify-between gap-6">
-                    <div className="flex gap-3">
-                      {[1, 2, 3, 4, 5, 6].map(i => (
-                        <div key={i} className="w-12 h-12 rounded-full bg-slate-800" />
-                      ))}
-                    </div>
-                    <div className="w-36 h-9 rounded-xl bg-slate-800" />
-                  </div>
-                ))}
-              </div>
-            ) : predictions.length > 1 ? (
-              <div className="space-y-4">
-                <h3 className="text-xs font-extrabold uppercase tracking-wider text-slate-400 px-1">
-                  Variantes Alternatives Optimisées
-                </h3>
-
-                <AnimatePresence mode="popLayout">
+              {predictions.length > 1 ? (
+                <div className="space-y-3">
                   {predictions.slice(1).map((pred, pIdx) => {
                     const stats = analyzeTypicality(pred);
                     const realIndex = pIdx + 1;
-
                     return (
-                      <motion.div
+                      <div 
                         key={realIndex}
-                        initial={{ opacity: 0, y: 15 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, scale: 0.95 }}
-                        transition={{ duration: 0.25, delay: pIdx * 0.05 }}
-                        className="glass-panel p-5 sm:p-6 flex flex-col lg:flex-row items-center justify-between gap-4"
+                        className="p-3.5 rounded-2xl bg-slate-900/50 border border-white/5 flex flex-col sm:flex-row items-center justify-between gap-3 hover:border-white/10 transition-colors"
                       >
-                        <div className="flex items-center gap-4 w-full lg:w-auto">
-                          <span className="text-xs font-black text-slate-500 w-7">#{realIndex + 1}</span>
-                          <div className="flex items-center gap-2 sm:gap-2.5 flex-wrap justify-center">
+                        <div className="flex items-center gap-3">
+                          <span className="text-xs font-black text-slate-500 font-mono w-6">#{realIndex + 1}</span>
+                          <div className="flex items-center gap-1.5">
                             {pred.slice(0, 5).map((num, i) => (
                               <div key={i} className="number-ball-sm">
                                 {num}
                               </div>
                             ))}
-                            <div className="h-6 w-px bg-white/10 mx-1 hidden sm:block" />
-                            <div className="number-ball-sm chance" title="Numéro Chance">
+                            <div className="h-5 w-px bg-white/10 mx-1" />
+                            <div className="number-ball-sm chance">
                               {pred[5]}
                             </div>
                           </div>
                         </div>
 
-                        <div className="flex items-center gap-3 w-full lg:w-auto justify-end">
-                          <span className={`px-2.5 py-1 rounded-lg text-[11px] font-bold ${
-                            stats.sumStatus === 'Optimal' 
-                              ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' 
-                              : 'bg-slate-800 text-slate-400'
-                          }`}>
+                        <div className="flex items-center gap-2">
+                          <span className="text-[10px] font-mono text-slate-400 px-2 py-0.5 rounded-lg bg-slate-800/80">
                             Somme {stats.sum}
                           </span>
-
-                          <span className={`px-2.5 py-1 rounded-lg text-[11px] font-bold ${
-                            stats.balanceStatus === 'Équilibré' 
-                              ? 'bg-primary/20 text-blue-300 border border-primary/30' 
-                              : 'bg-slate-800 text-slate-400'
-                          }`}>
-                            {stats.evens}P / {stats.odds}I
-                          </span>
-
                           <button
                             onClick={() => handleCopyGrille(pred)}
-                            className="btn-ghost !text-xs !py-1.5 !px-3 font-bold"
+                            className="btn-ghost !text-xs !py-1.5 !px-2.5 font-bold"
                           >
-                            <Copy className="w-3.5 h-3.5 text-slate-400" />
-                            <span>Copier</span>
+                            <Copy className="w-3 h-3 text-slate-400" />
                           </button>
                         </div>
-                      </motion.div>
+                      </div>
                     );
                   })}
-                </AnimatePresence>
-              </div>
-            ) : null}
+                </div>
+              ) : (
+                <div className="p-4 rounded-xl bg-slate-900/30 text-center text-xs text-slate-500 italic">
+                  Sélectionnez 2, 3, 5 ou 10 grilles pour afficher des variantes
+                </div>
+              )}
+            </div>
 
           </div>
-        )}
 
-        {/* Tab 2: STATS & HEATMAP */}
-        {activeTab === 'stats' && (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {/* RIGHT COLUMN: REAL-TIME LSTM NEURAL TRAINING STATION (5 Cols) */}
+          <div className="lg:col-span-5 space-y-6">
             
-            {/* Top 10 Numbers Heatmap */}
-            <SpatialCard className="p-6 sm:p-8 space-y-6" glowColor="rgba(255, 209, 0, 0.15)">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h3 className="text-lg font-black text-white flex items-center gap-2">
-                    <Flame className="w-5 h-5 text-chance" /> Numéros les Plus Fréquents
-                  </h3>
-                  <p className="text-xs text-slate-400">Distribution statistique sur les tirages officiels</p>
-                </div>
-                <span className="text-xs font-bold text-slate-500 uppercase">Top 10</span>
-              </div>
-
-              <div className="grid grid-cols-5 gap-3">
-                {frequencies?.topNums.map((num, idx) => (
-                  <motion.div 
-                    key={idx}
-                    whileHover={{ scale: 1.08 }}
-                    className="flex flex-col items-center gap-1.5 p-3 rounded-2xl bg-slate-900/60 border border-white/5 hover:border-primary/40 transition-colors"
-                  >
-                    <div className="number-ball !w-11 !h-11 !text-base">
-                      {num}
-                    </div>
-                    <span className="text-[10px] font-black text-slate-500 uppercase">
-                      Rang {idx + 1}
-                    </span>
-                  </motion.div>
-                ))}
-              </div>
-            </SpatialCard>
-
-            {/* Top Chance Numbers & Latest Draw */}
-            <SpatialCard className="p-6 sm:p-8 space-y-6 flex flex-col justify-between" glowColor="rgba(255, 209, 0, 0.25)">
-              <div className="space-y-6">
-                <div>
-                  <h3 className="text-lg font-black text-white flex items-center gap-2">
-                    <Sparkles className="w-5 h-5 text-chance" /> Numéros Chance Favoris
-                  </h3>
-                  <p className="text-xs text-slate-400">Les 3 boules Chance les plus récurrentes</p>
-                </div>
-
-                <div className="flex items-center justify-around p-5 rounded-2xl bg-slate-900/60 border border-white/5">
-                  {frequencies?.topChances.map((c, idx) => (
-                    <motion.div key={idx} whileHover={{ scale: 1.1 }} className="flex flex-col items-center gap-2">
-                      <div className="number-ball chance !w-13 !h-13 !text-lg">
-                        {c}
-                      </div>
-                      <span className="text-[10px] font-black text-chance uppercase tracking-wider">
-                        Favori #{idx + 1}
-                      </span>
-                    </motion.div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Latest Verified Official Draw */}
-              {latestDraw && (
-                <div className="p-4 rounded-2xl bg-primary/10 border border-primary/20 space-y-2.5">
-                  <div className="flex justify-between items-center text-xs">
-                    <span className="font-extrabold text-primary uppercase tracking-wide">Dernier Tirage Référencé</span>
-                    <span className="text-slate-400 font-medium">{latestDraw.day} {latestDraw.month_year}</span>
+            <SpatialCard className="p-6 sm:p-7 space-y-6 border-cyan-500/25 shadow-2xl relative" glowColor="rgba(6, 182, 212, 0.3)">
+              
+              {/* Header with Live Status */}
+              <div className="flex items-center justify-between pb-4 border-b border-white/5">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 rounded-xl bg-cyan-500/10 text-cyan-400 flex items-center justify-center font-bold">
+                    <Activity className="w-4 h-4" />
                   </div>
-                  <div className="flex items-center gap-2 flex-wrap">
-                    {[latestDraw.num0, latestDraw.num1, latestDraw.num2, latestDraw.num3, latestDraw.num4].map((n, i) => (
-                      <div key={i} className="number-ball-sm">
-                        {n}
-                      </div>
-                    ))}
-                    <div className="number-ball-sm chance ml-1">
-                      {latestDraw.chance}
+                  <div>
+                    <h3 className="text-base font-black text-white tracking-tight">Moniteur d'Entraînement LSTM</h3>
+                    <p className="text-[11px] text-slate-400">Réseau Récurrent Bidirectionnel</p>
+                  </div>
+                </div>
+
+                <span className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider font-mono ${
+                  isTraining 
+                    ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 animate-pulse' 
+                    : hasModel 
+                    ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30' 
+                    : 'bg-slate-800 text-slate-400'
+                }`}>
+                  {isTraining ? 'Training Actif' : hasModel ? 'Modèle Prêt' : 'Non Entraîné'}
+                </span>
+              </div>
+
+              {/* Visual Neural Network Architecture */}
+              <NeuralArchitectureMonitor isTraining={isTraining} />
+
+              {/* Live Training Telemetry Metrics Grid */}
+              <div className="grid grid-cols-3 gap-2.5">
+                <div className="p-3 rounded-xl bg-[#030818]/80 border border-white/5 text-center">
+                  <span className="text-[9px] uppercase font-black text-slate-500 block">Époque</span>
+                  <span className="text-base font-black text-white font-mono">
+                    {currentEpoch > 0 ? `${currentEpoch}/${TRAINING_CONFIG[trainingMode].epochs}` : `${TRAINING_CONFIG[trainingMode].epochs}`}
+                  </span>
+                </div>
+
+                <div className="p-3 rounded-xl bg-[#030818]/80 border border-white/5 text-center">
+                  <span className="text-[9px] uppercase font-black text-slate-500 block">Loss (MAE)</span>
+                  <span className="text-base font-black text-cyan-400 font-mono">
+                    {currentLoss !== null ? currentLoss.toFixed(4) : lossHistory.length > 0 ? lossHistory[lossHistory.length - 1].loss.toFixed(4) : "—"}
+                  </span>
+                </div>
+
+                <div className="p-3 rounded-xl bg-[#030818]/80 border border-white/5 text-center">
+                  <span className="text-[9px] uppercase font-black text-slate-500 block">Batch Size</span>
+                  <span className="text-base font-black text-white font-mono">
+                    {TRAINING_CONFIG[trainingMode].batchSize}
+                  </span>
+                </div>
+              </div>
+
+              {/* Live Loss Convergence Curve Chart */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="font-extrabold text-slate-300 flex items-center gap-1.5">
+                    <TrendingDown className="w-3.5 h-3.5 text-cyan-400" />
+                    <span>Convergence de la Perte (Loss)</span>
+                  </span>
+                  <span className="text-[10px] font-mono text-slate-500">
+                    {lossHistory.length} points enregistrés
+                  </span>
+                </div>
+
+                <div className="h-44 w-full rounded-2xl bg-[#030818]/90 border border-white/5 p-2 flex items-center justify-center">
+                  {lossHistory.length > 0 ? (
+                    <ResponsiveContainer width="100%" height="100%">
+                      <AreaChart data={lossHistory}>
+                        <defs>
+                          <linearGradient id="lossGradient" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor="#00d2ff" stopOpacity={0.35}/>
+                            <stop offset="95%" stopColor="#0066cc" stopOpacity={0.0}/>
+                          </linearGradient>
+                        </defs>
+                        <XAxis dataKey="epoch" stroke="#334155" tick={{ fontSize: 10 }} />
+                        <YAxis stroke="#334155" tick={{ fontSize: 10 }} domain={['auto', 'auto']} />
+                        <Tooltip 
+                          contentStyle={{ backgroundColor: '#040b1c', border: '1px solid rgba(6,182,212,0.3)', borderRadius: '12px' }} 
+                          itemStyle={{ color: '#00d2ff', fontSize: 12, fontWeight: 'bold' }} 
+                          labelStyle={{ color: '#94a3b8', fontSize: 11 }}
+                        />
+                        <Area 
+                          type="monotone" 
+                          dataKey="loss" 
+                          stroke="#00d2ff" 
+                          strokeWidth={2.5} 
+                          fillOpacity={1} 
+                          fill="url(#lossGradient)" 
+                          isAnimationActive={false}
+                        />
+                      </AreaChart>
+                    </ResponsiveContainer>
+                  ) : (
+                    <div className="text-center space-y-1">
+                      <p className="text-xs font-bold text-slate-400">Courbe en attente d'apprentissage</p>
+                      <p className="text-[10px] text-slate-600">Lancez l'entraînement ci-dessous pour voir la perte chuter en direct</p>
                     </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Progress Bar (Visible when training) */}
+              {isTraining && (
+                <div className="space-y-1.5">
+                  <div className="flex justify-between text-xs font-mono font-bold">
+                    <span className="text-cyan-400">Progression Époques</span>
+                    <span className="text-white">{progress}%</span>
+                  </div>
+                  <div className="h-2 w-full bg-slate-900 rounded-full overflow-hidden">
+                    <motion.div 
+                      className="h-full bg-gradient-to-r from-cyan-500 to-primary"
+                      initial={{ width: 0 }}
+                      animate={{ width: `${progress}%` }}
+                    />
                   </div>
                 </div>
               )}
+
+              {/* Training Controls & Mode Select */}
+              <div className="space-y-3 pt-2">
+                <div className="flex items-center justify-between text-xs font-bold text-slate-400">
+                  <span>Mode d'Optimisation :</span>
+                  <div className="flex gap-2">
+                    {(['fast', 'precise'] as const).map(mode => (
+                      <button
+                        key={mode}
+                        onClick={() => setTrainingMode(mode)}
+                        className={`px-3 py-1 rounded-xl text-[11px] font-black uppercase transition-all ${
+                          trainingMode === mode 
+                            ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 shadow-md' 
+                            : 'bg-slate-900 text-slate-500 border border-white/5'
+                        }`}
+                      >
+                        {TRAINING_CONFIG[mode].label.split(' ')[0]} ({TRAINING_CONFIG[mode].epochs} ep)
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <button
+                  onClick={handleTrain}
+                  disabled={data.length === 0 || isTraining}
+                  className="btn-primary w-full !py-3 text-xs font-black uppercase tracking-wider shadow-lg shadow-cyan-500/20"
+                >
+                  {isTraining ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4 text-white" />}
+                  <span>{isTraining ? `Apprentissage Époque ${currentEpoch}...` : hasModel ? "Fine-Tuning du Modèle" : "Entraîner le Modèle LSTM"}</span>
+                </button>
+              </div>
+
             </SpatialCard>
 
           </div>
-        )}
 
-        {/* Tab 3: LAB IA & SIMULATEUR */}
-        {activeTab === 'lab' && (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            
-            {/* Interactive Grid Simulator */}
-            <SpatialCard className="p-6 sm:p-8 space-y-6" glowColor="rgba(225, 0, 26, 0.2)">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h3 className="text-lg font-black text-white flex items-center gap-2">
-                    <Target className="w-5 h-5 text-accent" /> Simulateur de Grille Personnalisée
-                  </h3>
-                  <p className="text-xs text-slate-400">Analysez la conformité statistique de vos 6 numéros fétiches</p>
-                </div>
-                {simResult && (
-                  <span className={`text-sm font-black px-3 py-1 rounded-xl ${
-                    simResult.score >= 60 
-                      ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' 
-                      : 'bg-chance/20 text-chance border border-chance/30'
-                  }`}>
-                    {simResult.score}% GTO
-                  </span>
-                )}
+        </div>
+
+        {/* BOTTOM STUDIO TILES: 3 Specialized Pro Modules */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          
+          {/* Tile 1: Custom Grid Simulator */}
+          <SpatialCard className="p-6 space-y-4" glowColor="rgba(225, 0, 26, 0.2)">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-sm font-black text-white flex items-center gap-2">
+                  <Target className="w-4 h-4 text-accent" />
+                  <span>Audit de Grille Personnalisée</span>
+                </h3>
+                <p className="text-[11px] text-slate-400">Testez vos 6 numéros fétiches</p>
               </div>
-
-              {/* Live 3D Balls Preview */}
-              <div className="flex items-center justify-center gap-2 py-3 bg-slate-900/40 rounded-2xl border border-white/5">
-                {simNumbers.slice(0, 5).map((num, i) => (
-                  <div key={i} className="number-ball-sm">
-                    {num}
-                  </div>
-                ))}
-                <div className="h-6 w-px bg-white/10 mx-1" />
-                <div className="number-ball-sm chance">
-                  {simNumbers[5]}
-                </div>
-              </div>
-
-              {/* 6 Inputs */}
-              <div className="grid grid-cols-6 gap-2">
-                {[0, 1, 2, 3, 4, 5].map(idx => (
-                  <div key={idx} className="space-y-1 text-center">
-                    <input 
-                      type="number"
-                      min="1"
-                      max={idx === 5 ? 10 : 49}
-                      value={simNumbers[idx]}
-                      onChange={(e) => {
-                        const next = [...simNumbers];
-                        next[idx] = parseInt(e.target.value) || 1;
-                        setSimNumbers(next);
-                      }}
-                      className={`w-full py-2.5 px-1 bg-slate-900 border rounded-xl text-center text-sm font-black text-white outline-none transition-all ${
-                        idx === 5 
-                          ? 'border-chance/40 focus:border-chance focus:ring-1 focus:ring-chance' 
-                          : 'border-white/10 focus:border-primary focus:ring-1 focus:ring-primary'
-                      }`}
-                    />
-                    <span className="text-[9px] font-bold text-slate-500 uppercase block">
-                      {idx === 5 ? 'Chance' : `N°${idx + 1}`}
-                    </span>
-                  </div>
-                ))}
-              </div>
-
-              <button 
-                onClick={handleSimulate}
-                className="btn-primary w-full !py-3 text-xs font-black uppercase tracking-wider"
-              >
-                Calculer la Conformité GTO
-              </button>
 
               {simResult && (
-                <div className="p-3.5 rounded-xl bg-slate-900/80 border border-white/5 text-center text-xs text-slate-300 italic">
-                  "{simResult.analysis}"
-                </div>
+                <span className={`text-xs font-black px-2.5 py-1 rounded-xl font-mono ${
+                  simResult.score >= 60 
+                    ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' 
+                    : 'bg-chance/20 text-chance border border-chance/30'
+                }`}>
+                  {simResult.score}% GTO
+                </span>
               )}
-            </SpatialCard>
+            </div>
 
-            {/* Backtest & Precision Card */}
-            <SpatialCard className="p-6 sm:p-8 space-y-6 flex flex-col justify-between" glowColor="rgba(0, 102, 204, 0.25)">
-              <div className="space-y-4">
-                <div>
-                  <h3 className="text-lg font-black text-white flex items-center gap-2">
-                    <Trophy className="w-5 h-5 text-chance" /> Backtesting 50 Tirages
-                  </h3>
-                  <p className="text-xs text-slate-400">Simulation rétrospective sur les 50 derniers tirages réels</p>
+            {/* 3D Balls Preview */}
+            <div className="flex items-center justify-center gap-1.5 py-2.5 bg-slate-900/50 rounded-xl border border-white/5">
+              {simNumbers.slice(0, 5).map((num, i) => (
+                <div key={i} className="number-ball-sm">
+                  {num}
                 </div>
-
-                {isBacktesting ? (
-                  <div className="py-4 space-y-2">
-                    <div className="flex justify-between text-xs font-bold">
-                      <span className="text-primary">Calcul neuronal en cours...</span>
-                      <span className="text-white">{progress}%</span>
-                    </div>
-                    <div className="h-2 w-full bg-slate-900 rounded-full overflow-hidden">
-                      <motion.div 
-                        className="h-full bg-primary"
-                        initial={{ width: 0 }}
-                        animate={{ width: `${progress}%` }}
-                      />
-                    </div>
-                  </div>
-                ) : backtestStats ? (
-                  <div className="grid grid-cols-3 gap-3">
-                    <div className="p-3.5 rounded-2xl bg-slate-900/80 border border-white/5 text-center">
-                      <span className="text-[10px] uppercase font-bold text-slate-500 block">Win Rate</span>
-                      <span className="text-xl font-black text-emerald-400">{backtestStats.winRate}%</span>
-                    </div>
-                    <div className="p-3.5 rounded-2xl bg-slate-900/80 border border-white/5 text-center">
-                      <span className="text-[10px] uppercase font-bold text-slate-500 block">Bons N° Moy</span>
-                      <span className="text-xl font-black text-white">{backtestStats.avgBonsNumeros}</span>
-                    </div>
-                    <div className="p-3.5 rounded-2xl bg-slate-900/80 border border-white/5 text-center">
-                      <span className="text-[10px] uppercase font-bold text-slate-500 block">Échantillon</span>
-                      <span className="text-xl font-black text-primary">{backtestStats.testSize}</span>
-                    </div>
-                  </div>
-                ) : (
-                  <p className="text-xs text-slate-500 italic">
-                    Lancez un test pour évaluer le taux de réussite historique du modèle actuel sur 50 tirages passés.
-                  </p>
-                )}
+              ))}
+              <div className="h-5 w-px bg-white/10 mx-1" />
+              <div className="number-ball-sm chance">
+                {simNumbers[5]}
               </div>
+            </div>
 
-              <button
-                onClick={handleBacktest}
-                disabled={isBacktesting || data.length === 0}
-                className="btn-ghost w-full !py-2.5 text-xs font-bold"
-              >
-                {isBacktesting ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4 text-chance" />}
-                <span>{isBacktesting ? "Simulation en cours..." : "Lancer le Test de Précision"}</span>
-              </button>
-            </SpatialCard>
-
-            {/* Neural Parameters & Architecture */}
-            <SpatialCard className="p-6 sm:p-8 space-y-6" glowColor="rgba(0, 102, 204, 0.25)">
-              <div>
-                <h3 className="text-lg font-black text-white flex items-center gap-2">
-                  <Settings className="w-5 h-5 text-primary" /> Paramètres du Réseau LSTM
-                </h3>
-                <p className="text-xs text-slate-400">Architecture bidirectionnelle et mémoire temporelle</p>
-              </div>
-
-              <div className="space-y-2">
-                <div className="flex justify-between text-xs font-bold text-slate-400">
-                  <span>Fenêtre Temporelle :</span>
-                  <span className="text-primary font-black">{windowLength} tirages consécutifs</span>
-                </div>
+            {/* Numeric inputs */}
+            <div className="grid grid-cols-6 gap-1.5">
+              {[0, 1, 2, 3, 4, 5].map(idx => (
                 <input 
-                  type="range"
-                  min="4"
-                  max="24"
-                  value={windowLength}
+                  key={idx}
+                  type="number"
+                  min="1"
+                  max={idx === 5 ? 10 : 49}
+                  value={simNumbers[idx]}
                   onChange={(e) => {
-                    const val = parseInt(e.target.value);
-                    setWindowLength(val);
-                    updateModelReferences(data, val);
+                    const next = [...simNumbers];
+                    next[idx] = parseInt(e.target.value) || 1;
+                    setSimNumbers(next);
                   }}
-                  className="w-full h-2 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-primary"
+                  className={`w-full py-2 bg-slate-900 border rounded-xl text-center text-xs font-black text-white outline-none transition-all ${
+                    idx === 5 ? 'border-chance/40 focus:border-chance' : 'border-white/10 focus:border-cyan-400'
+                  }`}
                 />
-              </div>
+              ))}
+            </div>
 
-              <div className="space-y-2">
-                <label className="text-xs font-bold text-slate-400 uppercase">Mode d'Entraînement :</label>
-                <div className="grid grid-cols-2 gap-3">
-                  {(['fast', 'precise'] as const).map(mode => (
-                    <button
-                      key={mode}
-                      onClick={() => setTrainingMode(mode)}
-                      className={`p-3 rounded-xl text-xs font-black uppercase text-left border transition-all ${
-                        trainingMode === mode 
-                          ? 'bg-primary/20 text-white border-primary shadow-lg shadow-primary/25' 
-                          : 'bg-slate-900/50 text-slate-400 border-white/5 hover:border-white/10'
-                      }`}
-                    >
-                      <div className="font-bold">{TRAINING_CONFIG[mode].label}</div>
-                      <div className="text-[10px] text-slate-500 font-normal mt-0.5">{TRAINING_CONFIG[mode].epochs} époques</div>
-                    </button>
-                  ))}
+            <button 
+              onClick={handleSimulate}
+              className="btn-ghost w-full !py-2 text-xs font-bold"
+            >
+              Auditer la Combinaison
+            </button>
+
+            {simResult && (
+              <p className="text-[11px] text-slate-300 italic text-center">
+                "{simResult.analysis}"
+              </p>
+            )}
+          </SpatialCard>
+
+          {/* Tile 2: Historical Backtest */}
+          <SpatialCard className="p-6 space-y-4 flex flex-col justify-between" glowColor="rgba(255, 209, 0, 0.2)">
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-sm font-black text-white flex items-center gap-2">
+                    <Trophy className="w-4 h-4 text-chance" />
+                    <span>Backtest sur 50 Tirages</span>
+                  </h3>
+                  <p className="text-[11px] text-slate-400">Validation empirique hors échantillon</p>
                 </div>
               </div>
 
-              <div className="pt-4 border-t border-white/5 flex gap-3">
-                <button onClick={handleExport} className="btn-ghost !text-xs !py-2 flex-1">
-                  <Database className="w-3.5 h-3.5" /> Exporter JSON
-                </button>
-                <label className="btn-ghost !text-xs !py-2 flex-1 cursor-pointer">
-                  <History className="w-3.5 h-3.5" /> Importer
-                  <input type="file" accept=".json" onChange={handleImport} className="hidden" />
-                </label>
-              </div>
-            </SpatialCard>
+              {isBacktesting ? (
+                <div className="py-6 space-y-2">
+                  <div className="flex justify-between text-xs font-mono font-bold">
+                    <span className="text-cyan-400">Simulation rétroactive...</span>
+                    <span className="text-white">{progress}%</span>
+                  </div>
+                  <div className="h-2 w-full bg-slate-900 rounded-full overflow-hidden">
+                    <motion.div 
+                      className="h-full bg-cyan-400"
+                      initial={{ width: 0 }}
+                      animate={{ width: `${progress}%` }}
+                    />
+                  </div>
+                </div>
+              ) : backtestStats ? (
+                <div className="grid grid-cols-3 gap-2">
+                  <div className="p-3 rounded-xl bg-slate-900/80 border border-white/5 text-center">
+                    <span className="text-[9px] uppercase font-bold text-slate-500 block">Win Rate</span>
+                    <span className="text-lg font-black text-emerald-400 font-mono">{backtestStats.winRate}%</span>
+                  </div>
+                  <div className="p-3 rounded-xl bg-slate-900/80 border border-white/5 text-center">
+                    <span className="text-[9px] uppercase font-bold text-slate-500 block">N° Moyens</span>
+                    <span className="text-lg font-black text-white font-mono">{backtestStats.avgBonsNumeros}</span>
+                  </div>
+                  <div className="p-3 rounded-xl bg-slate-900/80 border border-white/5 text-center">
+                    <span className="text-[9px] uppercase font-bold text-slate-500 block">Échantillon</span>
+                    <span className="text-lg font-black text-cyan-400 font-mono">{backtestStats.testSize}</span>
+                  </div>
+                </div>
+              ) : (
+                <p className="text-xs text-slate-500 italic py-2">
+                  Évaluez le taux de réussite historique du modèle actuel sur 50 tirages passés.
+                </p>
+              )}
+            </div>
 
-            {/* Neural Loss Chart */}
-            <SpatialCard className="p-6 sm:p-8 space-y-4 flex flex-col justify-between" glowColor="rgba(0, 102, 204, 0.2)">
-              <div>
-                <h3 className="text-lg font-black text-white flex items-center gap-2">
-                  <Activity className="w-5 h-5 text-accent" /> Courbe de Perte (Loss)
-                </h3>
-                <p className="text-xs text-slate-400">Convergence neuronale au cours des époques d'apprentissage</p>
-              </div>
+            <button
+              onClick={handleBacktest}
+              disabled={isBacktesting || data.length === 0}
+              className="btn-ghost w-full !py-2 text-xs font-bold"
+            >
+              {isBacktesting ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Play className="w-3.5 h-3.5 text-chance" />}
+              <span>{isBacktesting ? "Calcul en cours..." : "Lancer le Test de Précision"}</span>
+            </button>
+          </SpatialCard>
 
-              <div className="h-44 w-full flex items-center justify-center">
-                {lossHistory.length > 0 ? (
-                  <ResponsiveContainer width="100%" height="100%">
-                    <LineChart data={lossHistory}>
-                      <Line 
-                        type="monotone" 
-                        dataKey="loss" 
-                        stroke="#0066cc" 
-                        strokeWidth={2.5} 
-                        dot={false} 
-                        isAnimationActive={false} 
-                      />
-                      <Tooltip 
-                        contentStyle={{ backgroundColor: '#060e24', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '12px' }} 
-                        itemStyle={{ color: '#38bdf8' }} 
-                        labelClassName="hidden" 
-                      />
-                    </LineChart>
-                  </ResponsiveContainer>
-                ) : (
-                  <span className="text-xs text-slate-600 font-medium">
-                    {isTraining ? "Calcul de la courbe..." : "Entraînez le modèle pour visualiser la convergence"}
-                  </span>
-                )}
-              </div>
-            </SpatialCard>
+          {/* Tile 3: Hot/Cold Frequencies */}
+          <SpatialCard className="p-6 space-y-4" glowColor="rgba(0, 102, 204, 0.2)">
+            <div>
+              <h3 className="text-sm font-black text-white flex items-center gap-2">
+                <Flame className="w-4 h-4 text-chance" />
+                <span>Chaleur des Numéros</span>
+              </h3>
+              <p className="text-[11px] text-slate-400">Les numéros les plus fréquents de l'historique</p>
+            </div>
 
-          </div>
-        )}
+            <div className="grid grid-cols-5 gap-2">
+              {frequencies?.topNums.slice(0, 10).map((num, idx) => (
+                <div key={idx} className="flex flex-col items-center gap-1 p-2 rounded-xl bg-slate-900/50 border border-white/5">
+                  <div className="number-ball-sm !w-8 !h-8 !text-xs">
+                    {num}
+                  </div>
+                  <span className="text-[8px] font-black text-slate-500 font-mono">#{idx + 1}</span>
+                </div>
+              ))}
+            </div>
+
+            <div className="pt-2 border-t border-white/5 flex items-center justify-between">
+              <span className="text-xs font-bold text-slate-400">Numéros Chance Favoris :</span>
+              <div className="flex gap-2">
+                {frequencies?.topChances.map((c, i) => (
+                  <div key={i} className="number-ball-sm chance !w-7 !h-7 !text-xs font-black">
+                    {c}
+                  </div>
+                ))}
+              </div>
+            </div>
+          </SpatialCard>
+
+        </div>
 
       </main>
 
@@ -1297,7 +1272,7 @@ export default function Home() {
           Application non affiliée, non liée et non sponsorisée par la Française des Jeux (FDJ).
         </p>
         <p className="text-[11px] text-slate-600">
-          Antigravity UI Architecture • © 2026
+          Antigravity UI Studio • © 2026
         </p>
       </footer>
     </div>
