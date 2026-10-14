@@ -5,10 +5,10 @@
   
   --color-background: #020511; /* Antigravity Deep Void */
   --color-foreground: #f8fafc;
-  --color-primary: #0066cc; /* Electric FDJ Royal Blue */
+  --color-primary: #0066cc; /* Electric Royal Blue */
   --color-primary-hover: #0052a3;
-  --color-accent: #e1001a; /* FDJ Red for alerts/critical data */
-  --color-chance: #ffd100; /* FDJ Gold Chance Ball */
+  --color-accent: #e1001a; /* Vivid Coral Red */
+  --color-chance: #ffd100; /* Gold Chance Ball */
   --color-success: #10b981; /* Emerald Success / Win */
   --color-panel: #060e24; /* Deep Space Panel */
   --color-card: #0a1738; /* Elevated Spatial Card */
@@ -167,7 +167,7 @@
     @apply opacity-40 cursor-not-allowed;
   }
 
-  /* 3D Photorealistic FDJ Loto Balls with Optical Depth */
+  /* 3D Photorealistic Loto Balls with Optical Depth */
   .number-ball {
     @apply flex items-center justify-center rounded-full font-black text-white relative select-none cursor-pointer;
     width: 3.5rem;

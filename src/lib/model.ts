@@ -98,7 +98,7 @@ export function processData(draws: LotoDraw[]): ProcessedDraw[] {
     const distChance = lastSeenChanceMap[d.chance] !== undefined ? i - lastSeenChanceMap[d.chance] : i;
     lastSeenChanceMap[d.chance] = i;
 
-    // Convert FDJ date format to timestamp
+    // Convert draw date format to timestamp
     // Example: "Mercredi 24" + "Avril 2024"
     const parseDate = () => {
       try {

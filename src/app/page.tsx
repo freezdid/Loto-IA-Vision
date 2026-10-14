@@ -194,7 +194,7 @@ export default function Home() {
   const [backendName, setBackendName] = useState("WebGPU");
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
-  // Official FDJ Countdown (Mon, Wed, Sat 20h20)
+  // Next Draw Countdown (Mon, Wed, Sat 20h20)
   const [timeLeft, setTimeLeft] = useState<{ label: string; days: number; hours: number; minutes: number; seconds: number }>({
     label: "Calcul...",
     days: 0,
@@ -326,7 +326,7 @@ export default function Home() {
 
   const handleScrape = async () => {
     setIsScraping(true);
-    setScrapeStatus("Vérification FDJ...");
+    setScrapeStatus("Actualisation des tirages...");
     try {
       const res = await fetch('/api/loto');
       const json = await res.json();
@@ -546,7 +546,7 @@ export default function Home() {
     if (gaps > 20 && gaps < 40) score += 20;
 
     let analysis = "";
-    if (score > 60) analysis = "Excellente conformité aux lois statistiques de la FDJ.";
+    if (score > 60) analysis = "Excellente conformité aux distributions statistiques du Loto.";
     else if (score > 40) analysis = "Combinaison standard dans la moyenne historique.";
     else analysis = "Cette grille s'écarte des patterns statistiques usuels.";
 
@@ -694,7 +694,7 @@ export default function Home() {
                 <span>Laboratoire Prédictif Spatial</span>
                 {latestDraw && (
                   <span className="text-slate-400 font-normal">
-                    • Tirage FDJ : {latestDraw.day} {latestDraw.month_year}
+                    • Dernier Tirage : {latestDraw.day} {latestDraw.month_year}
                   </span>
                 )}
               </div>
@@ -720,10 +720,10 @@ export default function Home() {
                 onClick={handleScrape}
                 disabled={isScraping}
                 className="btn-ghost !py-3.5 !px-4 text-sm w-full sm:w-auto"
-                title="Synchroniser avec le site officiel FDJ"
+                title="Actualiser les derniers tirages"
               >
                 <RefreshCw className={`w-4 h-4 ${isScraping ? 'animate-spin text-primary' : ''}`} />
-                <span>{scrapeStatus || "Vérifier FDJ"}</span>
+                <span>{scrapeStatus || "Actualiser"}</span>
               </button>
             </div>
           </div>
@@ -1288,12 +1288,15 @@ export default function Home() {
       </main>
 
       {/* Footer */}
-      <footer className="mt-12 py-8 border-t border-white/5 text-center text-xs text-slate-500 font-medium">
+      <footer className="mt-12 py-8 border-t border-white/5 text-center text-xs text-slate-500 font-medium space-y-2">
         <p className="max-w-xl mx-auto px-4">
-          Loto IA Vision • Intelligence Spatiale & Deep Learning. 
+          Loto IA Vision • Plateforme indépendante d'intelligence spatiale et de Deep Learning. 
           Les jeux d'argent comportent des risques : endettement, dépendance. Appelez le 09 74 75 13 13.
         </p>
-        <p className="mt-2 text-[11px] text-slate-600">
+        <p className="text-[11px] text-slate-600 max-w-lg mx-auto px-4">
+          Application non affiliée, non liée et non sponsorisée par la Française des Jeux (FDJ).
+        </p>
+        <p className="text-[11px] text-slate-600">
           Antigravity UI Architecture • © 2026
         </p>
       </footer>
