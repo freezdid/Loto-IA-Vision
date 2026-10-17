@@ -1,388 +1,651 @@
 import * as tf from '@tensorflow/tfjs';
 import '@tensorflow/tfjs-backend-webgpu';
+import { LotoDraw, ProcessedDraw, TrainingMode } from './types';
+import { parseDrawDate } from './dates';
+import {
+  MAIN_COUNT,
+  MAX_CHANCE,
+  MAX_MAIN,
+  MIN_CHANCE,
+  MIN_MAIN,
+  NUM_FEATURES,
+  NUM_LABELS,
+  sanitizeDraws,
+  sortDrawsByDate,
+} from './loto';
 
-export async function initTensorFlow() {
-  await tf.ready();
-  if (tf.engine().backendName !== 'webgpu') {
-    try {
-      await tf.setBackend('webgpu');
-      console.log('Backend WebGPU activé');
-    } catch (e) {
-      console.warn('WebGPU non supporté, repli sur WebGL');
-      await tf.setBackend('webgl');
-    }
-  }
-}
+export {
+  FEATURE_NAMES,
+  MAIN_COUNT,
+  MAX_CHANCE,
+  MAX_MAIN,
+  MIN_CHANCE,
+  MIN_MAIN,
+  NUM_FEATURES,
+  NUM_LABELS,
+  sanitizeDraws,
+  sortDrawsByDate,
+} from './loto';
 
-export const TRAINING_CONFIG = {
-  fast: {
-    epochs: 25,
-    batchSize: 128,
-    label: 'Turbo (Rapide)',
-    desc: 'Idéal pour le quotidien'
-  },
-  precise: {
-    epochs: 50,
-    batchSize: 64,
-    label: 'Elite (Précis)',
-    desc: 'Analyse approfondie'
-  }
-};
+const EVEN = new Set(Array.from({ length: 25 }, (_, i) => (i + 1) * 2));
+const ODD = new Set(Array.from({ length: 25 }, (_, i) => i * 2 + 1));
+const countEven = (nums: number[]) => nums.filter((n) => EVEN.has(n)).length;
+const countOdd = (nums: number[]) => nums.filter((n) => ODD.has(n)).length;
+const countUnder = (nums: number[], value: number) => nums.filter((n) => n <= value).length;
 
-
-export interface LotoDraw {
-  day: string;
-  month_year: string;
-  num0: number;
-  num1: number;
-  num2: number;
-  num3: number;
-  num4: number;
-  chance: number;
-  dateStr?: string; // Optional raw date string
-}
-
-export interface ProcessedDraw extends LotoDraw {
-  fullDate: number; // Timestamp for sorting/comparison
-  freq_num0: number;
-  freq_num1: number;
-  freq_num2: number;
-  freq_num3: number;
-  freq_num4: number;
-  freq_chance: number;
-  sum_diff: number;
-  pair_chance: number;
-  impair_chance: number;
-  pair: number;
-  impair: number;
-  is_under_24: number;
-  is_under_40: number;
-  last_seen_num0: number;
-  last_seen_num1: number;
-  last_seen_num2: number;
-  last_seen_num3: number;
-  last_seen_num4: number;
-  last_seen_chance: number;
-}
-
-const pairs = new Set([2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30, 32, 34, 36, 38, 40, 42, 44, 46, 48, 50]);
-const impairs = new Set([1, 3, 5, 7, 9, 11, 13, 15, 17, 19, 21, 23, 25, 27, 29, 31, 33, 35, 37, 39, 41, 43, 45, 47, 49]);
-
-function countPairs(nums: number[]) { return nums.filter(n => pairs.has(n)).length; }
-function countImpairs(nums: number[]) { return nums.filter(n => impairs.has(n)).length; }
-function countUnder(nums: number[], val: number) { return nums.filter(n => n <= val).length; }
-
+/**
+ * Turn raw draws into an ordered, feature-rich series.
+ *
+ * Draws are sorted chronologically by their parsed date (falling back to the
+ * scraped order when a date cannot be parsed). Every feature only depends on
+ * draws up to its own index, so the series can be used for honest backtesting
+ * without leaking the future.
+ */
 export function processData(draws: LotoDraw[]): ProcessedDraw[] {
-  const reversed = [...draws].reverse();
-  
-  const freqMap: Record<string, number> = {};
-  const lastSeenMap: Record<number, number> = {};
-  const lastSeenChanceMap: Record<number, number> = {};
+  const ordered = sortDrawsByDate(sanitizeDraws(draws), 'asc');
+  if (ordered.length === 0) return [];
 
-  return reversed.map((d, i) => {
-    const nums = [d.num0, d.num1, d.num2, d.num3, d.num4];
-    
-    // Update Frequencies (O(1) lookup instead of O(N) loop)
-    const updateFreq = (key: string, val: number) => {
-      const compositeKey = `${key}_${val}`;
-      freqMap[compositeKey] = (freqMap[compositeKey] || 0) + 1;
-      return freqMap[compositeKey];
-    };
+  const freqMap = new Map<string, number>();
+  const lastSeenMain = new Map<number, number>();
+  const lastSeenChance = new Map<number, number>();
 
-    // Calculer last_seen
-    const lastSeen = nums.map(n => {
-      const dist = lastSeenMap[n] !== undefined ? i - lastSeenMap[n] : i;
-      lastSeenMap[n] = i;
-      return dist;
+  const bumpFreq = (key: string, value: number) => {
+    const composite = `${key}_${value}`;
+    const next = (freqMap.get(composite) ?? 0) + 1;
+    freqMap.set(composite, next);
+    return next;
+  };
+
+  return ordered.map((draw, index) => {
+    const nums = [draw.num0, draw.num1, draw.num2, draw.num3, draw.num4];
+
+    const distanceToLastSeen = nums.map((n) => {
+      const previous = lastSeenMain.get(n);
+      const distance = previous === undefined ? index : index - previous;
+      lastSeenMain.set(n, index);
+      return distance;
     });
-    const distChance = lastSeenChanceMap[d.chance] !== undefined ? i - lastSeenChanceMap[d.chance] : i;
-    lastSeenChanceMap[d.chance] = i;
 
-    // Convert draw date format to timestamp
-    // Example: "Mercredi 24" + "Avril 2024"
-    const parseDate = () => {
-      try {
-        const dayPart = d.day.split(' ')[1]; // "24"
-        const monthYear = d.month_year.split(' '); // ["Avril", "2024"]
-        const months: any = { "Janvier": 0, "Février": 1, "Mars": 2, "Avril": 3, "Mai": 4, "Juin": 5, "Juillet": 6, "Août": 7, "Septembre": 8, "Octobre": 9, "Novembre": 10, "Décembre": 11 };
-        return new Date(parseInt(monthYear[1]), months[monthYear[0]], parseInt(dayPart)).getTime();
-      } catch(e) { return Date.now(); }
-    };
+    const previousChance = lastSeenChance.get(draw.chance);
+    const chanceDistance = previousChance === undefined ? index : index - previousChance;
+    lastSeenChance.set(draw.chance, index);
 
     return {
-      ...d,
-      fullDate: parseDate(),
-      freq_num0: updateFreq('num0', d.num0),
-      freq_num1: updateFreq('num1', d.num1),
-      freq_num2: updateFreq('num2', d.num2),
-      freq_num3: updateFreq('num3', d.num3),
-      freq_num4: updateFreq('num4', d.num4),
-      freq_chance: updateFreq('chance', d.chance),
-      sum_diff: Math.pow(d.num1 - d.num0, 2) + Math.pow(d.num2 - d.num1, 2) + Math.pow(d.num3 - d.num2, 2) + Math.pow(d.num4 - d.num3, 2),
-      pair_chance: pairs.has(d.chance) ? 1 : 0,
-      impair_chance: impairs.has(d.chance) ? 1 : 0,
-      pair: countPairs(nums),
-      impair: countImpairs(nums),
+      ...draw,
+      fullDate: parseDrawDate(draw) ?? 0,
+      freq_num0: bumpFreq('num0', draw.num0),
+      freq_num1: bumpFreq('num1', draw.num1),
+      freq_num2: bumpFreq('num2', draw.num2),
+      freq_num3: bumpFreq('num3', draw.num3),
+      freq_num4: bumpFreq('num4', draw.num4),
+      freq_chance: bumpFreq('chance', draw.chance),
+      sum_diff:
+        (draw.num1 - draw.num0) ** 2 +
+        (draw.num2 - draw.num1) ** 2 +
+        (draw.num3 - draw.num2) ** 2 +
+        (draw.num4 - draw.num3) ** 2,
+      pair_chance: EVEN.has(draw.chance) ? 1 : 0,
+      impair_chance: ODD.has(draw.chance) ? 1 : 0,
+      pair: countEven(nums),
+      impair: countOdd(nums),
       is_under_24: countUnder(nums, 24),
       is_under_40: countUnder(nums, 40),
-      last_seen_num0: lastSeen[0],
-      last_seen_num1: lastSeen[1],
-      last_seen_num2: lastSeen[2],
-      last_seen_num3: lastSeen[3],
-      last_seen_num4: lastSeen[4],
-      last_seen_chance: distChance
+      last_seen_num0: distanceToLastSeen[0],
+      last_seen_num1: distanceToLastSeen[1],
+      last_seen_num2: distanceToLastSeen[2],
+      last_seen_num3: distanceToLastSeen[3],
+      last_seen_num4: distanceToLastSeen[4],
+      last_seen_chance: chanceDistance,
     };
   });
 }
 
-// StandardScaler implementation
+/** Project one processed draw onto the ordered feature vector. */
+export function drawToFeatures(draw: ProcessedDraw): number[] {
+  return [
+    draw.num0, draw.num1, draw.num2, draw.num3, draw.num4, draw.chance,
+    draw.freq_num0, draw.freq_num1, draw.freq_num2, draw.freq_num3, draw.freq_num4, draw.freq_chance,
+    draw.sum_diff, draw.pair_chance, draw.impair_chance, draw.pair, draw.impair, draw.is_under_24, draw.is_under_40,
+    draw.last_seen_num0, draw.last_seen_num1, draw.last_seen_num2, draw.last_seen_num3, draw.last_seen_num4, draw.last_seen_chance,
+  ];
+}
+
+/** Z-score scaler fitted on the training rows only. */
 export class StandardScaler {
   means: number[] = [];
   stds: number[] = [];
 
-  fit(data: number[][]) {
-    const rows = data.length;
-    const cols = data[0].length;
-    for (let j = 0; j < cols; j++) {
+  fit(rows: number[][]): this {
+    this.means = [];
+    this.stds = [];
+    if (rows.length === 0) return this;
+    const columns = rows[0].length;
+    for (let j = 0; j < columns; j++) {
       let sum = 0;
-      for (let i = 0; i < rows; i++) sum += data[i][j];
-      const mean = sum / rows;
+      for (let i = 0; i < rows.length; i++) sum += rows[i][j];
+      const mean = sum / rows.length;
+      let squared = 0;
+      for (let i = 0; i < rows.length; i++) squared += (rows[i][j] - mean) ** 2;
+      const std = Math.sqrt(squared / rows.length) || 1;
       this.means.push(mean);
-      
-      let sqSum = 0;
-      for (let i = 0; i < rows; i++) sqSum += Math.pow(data[i][j] - mean, 2);
-      // variance = sqSum / rows
-      const std = Math.sqrt(sqSum / rows) || 1; // avoid div by 0
       this.stds.push(std);
     }
+    return this;
   }
 
-  transform(data: number[][]): number[][] {
-    return data.map(row => 
-      row.map((val, j) => (val - this.means[j]) / this.stds[j])
-    );
+  transform(rows: number[][]): number[][] {
+    return rows.map((row) => row.map((value, j) => (value - this.means[j]) / this.stds[j]));
   }
 
-  inverseTransform(data: number[][]): number[][] {
-    return data.map(row => 
-      row.map((val, j) => (val * this.stds[j]) + this.means[j])
-    );
+  inverseRow(row: number[]): number[] {
+    return row.map((value, j) => value * this.stds[j] + this.means[j]);
   }
 }
 
-export function createDataset(processed: ProcessedDraw[], windowLength: number = 12) {
-  // We extract the numerical features. The python code selected:
-  // ['num0', 'num1', 'num2', 'num3', 'num4', 'chance', 'freq_num0', 'freq_num1', 'freq_num2', 'freq_num3', 'freq_num4', 'freq_chance', 'sum_diff', 'pair_chance', 'impair_chance', 'pair', 'impair', 'is_under_24', 'is_under_40']
-  const data = processed.map(d => [
-    d.num0, d.num1, d.num2, d.num3, d.num4, d.chance,
-    d.freq_num0, d.freq_num1, d.freq_num2, d.freq_num3, d.freq_num4, d.freq_chance,
-    d.sum_diff, d.pair_chance, d.impair_chance, d.pair, d.impair, d.is_under_24, d.is_under_40,
-    d.last_seen_num0, d.last_seen_num1, d.last_seen_num2, d.last_seen_num3, d.last_seen_num4, d.last_seen_chance
-  ]);
+export interface Dataset {
+  X: number[][][];
+  Y: number[][];
+  scaler: StandardScaler;
+  /** Last `windowLength` draws, scaled with the same scaler (inference input). */
+  lastWindow: number[][];
+}
 
-  const scaler = new StandardScaler();
-  scaler.fit(data);
-  const scaled = scaler.transform(data);
+/** Build sliding windows over a series of processed draws. */
+export function createDataset(processed: ProcessedDraw[], windowLength: number): Dataset {
+  const features = processed.map(drawToFeatures);
+  const scaler = new StandardScaler().fit(features);
+  return {
+    ...buildScaledWindows(processed, windowLength, scaler),
+    scaler,
+    lastWindow: scaledLastWindow(processed, windowLength, scaler),
+  };
+}
 
+/**
+ * Last `windowLength` draws, scaled with the provided scaler.
+ * Used for inference so the input normalization always matches the training one.
+ */
+export function scaledLastWindow(
+  processed: ProcessedDraw[],
+  windowLength: number,
+  scaler: StandardScaler,
+): number[][] {
+  const scaled = scaler.transform(processed.map(drawToFeatures));
+  return scaled.slice(Math.max(0, scaled.length - windowLength));
+}
+
+/** Same windows, but with a scaler fitted elsewhere (train/test separation). */
+export function buildScaledWindows(
+  processed: ProcessedDraw[],
+  windowLength: number,
+  scaler: StandardScaler,
+): { X: number[][][]; Y: number[][] } {
+  return buildWindows(scaler.transform(processed.map(drawToFeatures)), windowLength);
+}
+
+function buildWindows(scaled: number[][], windowLength: number) {
   const X: number[][][] = [];
   const Y: number[][] = [];
-
-  for (let i = 0; i < scaled.length - windowLength; i++) {
-    const xWindow = scaled.slice(i, i + windowLength);
-    // Labels are the first 6 features of the NEXT draw
-    const yTarget = scaled[i + windowLength].slice(0, 6);
-    X.push(xWindow);
-    Y.push(yTarget);
+  for (let i = 0; i + windowLength < scaled.length; i++) {
+    X.push(scaled.slice(i, i + windowLength));
+    Y.push(scaled[i + windowLength].slice(0, NUM_LABELS));
   }
-
-  return { X, Y, scaler, lastTwelve: scaled.slice(scaled.length - windowLength) };
+  return { X, Y };
 }
 
-export function buildModel(windowLength: number, numFeatures: number, numLabels: number) {
-  const model = tf.sequential();
-  model.add(tf.layers.lstm({
-    units: 100,
-    inputShape: [windowLength, numFeatures],
-    returnSequences: true,
-    kernelInitializer: 'glorotNormal'
-  }));
-  model.add(tf.layers.lstm({
-    units: 100,
-    dropout: 0.1,
-    returnSequences: false,
-    kernelInitializer: 'glorotNormal'
-  }));
-  model.add(tf.layers.dense({ units: numLabels }));
+// ---------------------------------------------------------------------------
+// Architectures
+// ---------------------------------------------------------------------------
 
-  model.compile({
-    loss: 'meanAbsoluteError', // 'mae'
-    optimizer: 'adam',
-    metrics: ['accuracy']
-  });
-
-  return model;
+export interface ArchitectureNode {
+  id: string;
+  label: string;
+  value: string;
+  detail: string;
 }
 
-export function buildFastModel(windowLength: number, numFeatures: number, numLabels: number) {
-  const model = tf.sequential();
+/** Describe the architecture so the UI can never drift from the real model. */
+export function getArchitectureSpec(mode: TrainingMode, windowLength: number): ArchitectureNode[] {
+  if (mode === 'fast') {
+    return [
+      { id: 'input', label: 'Entrée', value: `${windowLength}×25`, detail: 'Tirages passés' },
+      { id: 'lstm', label: 'LSTM', value: '64', detail: 'Mémoire' },
+      { id: 'dropout', label: 'Dropout', value: '10%', detail: 'Régularisation' },
+      { id: 'dense', label: 'Dense', value: '32', detail: 'ReLU' },
+      { id: 'out', label: 'Sortie', value: '6', detail: '5 + Chance' },
+    ];
+  }
+  return [
+    { id: 'input', label: 'Entrée', value: `${windowLength}×25`, detail: 'Tirages passés' },
+    { id: 'bilstm1', label: 'Bi-LSTM', value: '96', detail: 'Mémoire longue' },
+    { id: 'dropout', label: 'Dropout', value: '20%', detail: 'Anti-surapprentissage' },
+    { id: 'bilstm2', label: 'Bi-LSTM', value: '48', detail: 'Mémoire courte' },
+    { id: 'attention', label: 'Attention', value: '×1', detail: 'Pondération temporelle' },
+    { id: 'dense', label: 'Dense', value: '64', detail: 'Fusion' },
+    { id: 'out', label: 'Sortie', value: '6', detail: '5 + Chance' },
+  ];
+}
+
+/**
+ * Temporal attention pooling: score every timestep, softmax the scores and
+ * return the weighted average of the sequence. Keeps the useful steps and
+ * fades the noise instead of trusting the last hidden state only.
+ */
+function attentionPooling(input: tf.SymbolicTensor, windowLength: number): tf.SymbolicTensor {
+  const scores = tf.layers.dense({
+    units: 1,
+    activation: 'tanh',
+    kernelInitializer: 'glorotNormal',
+    name: 'attention_scores',
+  }).apply(input) as tf.SymbolicTensor;
+
+  const flat = tf.layers.flatten().apply(scores) as tf.SymbolicTensor;
+  const weights = tf.layers.softmax({ name: 'attention_weights' }).apply(flat) as tf.SymbolicTensor;
+  const shaped = tf.layers.reshape({ targetShape: [windowLength, 1] }).apply(weights) as tf.SymbolicTensor;
+  const weighted = tf.layers.multiply().apply([input, shaped]) as tf.SymbolicTensor;
+  return tf.layers.globalAveragePooling1d({ name: 'attention_pool' }).apply(weighted) as tf.SymbolicTensor;
+}
+
+/** Lightweight model: one LSTM + two dense layers. Fast enough for laptops. */
+export function buildFastModel(windowLength: number, numFeatures: number, numLabels: number): tf.LayersModel {
+  const model = tf.sequential({ name: 'loto-turbo' });
   model.add(tf.layers.lstm({
     units: 64,
     inputShape: [windowLength, numFeatures],
     returnSequences: false,
-    kernelInitializer: 'glorotNormal'
+    dropout: 0.1,
+    kernelInitializer: 'glorotNormal',
+    recurrentInitializer: 'orthogonal',
   }));
-  model.add(tf.layers.dense({ units: 32, activation: 'relu' }));
-  model.add(tf.layers.dense({ units: numLabels }));
-
-  model.compile({
-    loss: 'meanAbsoluteError',
-    optimizer: tf.train.adam(0.001),
-    metrics: ['accuracy']
-  });
-
+  model.add(tf.layers.dense({ units: 32, activation: 'relu', kernelInitializer: 'heNormal' }));
+  model.add(tf.layers.dense({ units: numLabels, kernelInitializer: 'glorotNormal' }));
   return model;
 }
 
+/** Deep bi-directional model with attention pooling: slower, more expressive. */
+export function buildAdvancedModel(windowLength: number, numFeatures: number, numLabels: number): tf.LayersModel {
+  const input = tf.input({ shape: [windowLength, numFeatures], name: 'draw_sequence' });
 
-export function buildAdvancedModel(windowLength: number, numFeatures: number, numLabels: number) {
-  const input = tf.input({ shape: [windowLength, numFeatures] });
-  
-  // LSTM Path
-  const lstm1 = tf.layers.bidirectional({
-    layer: tf.layers.lstm({ 
-      units: 128, 
-      returnSequences: true, 
+  const memory = tf.layers.bidirectional({
+    name: 'bilstm_memory',
+    mergeMode: 'concat',
+    layer: tf.layers.lstm({
+      units: 96,
+      returnSequences: true,
       kernelInitializer: 'glorotNormal',
-      recurrentInitializer: 'glorotNormal' 
-    }) as any,
-    mergeMode: 'concat'
+      recurrentInitializer: 'orthogonal',
+    }) as tf.RNN,
   }).apply(input) as tf.SymbolicTensor;
-  
-  const dropout1 = tf.layers.dropout({ rate: 0.2 }).apply(lstm1) as tf.SymbolicTensor;
-  
-  const lstm2 = tf.layers.bidirectional({
-    layer: tf.layers.lstm({ 
-      units: 64, 
-      returnSequences: true, 
+
+  const memoryDropout = tf.layers.dropout({ rate: 0.2 }).apply(memory) as tf.SymbolicTensor;
+
+  const context = tf.layers.bidirectional({
+    name: 'bilstm_context',
+    mergeMode: 'concat',
+    layer: tf.layers.lstm({
+      units: 48,
+      returnSequences: true,
       kernelInitializer: 'glorotNormal',
-      recurrentInitializer: 'glorotNormal'
-    }) as any,
-    mergeMode: 'concat'
-  }).apply(dropout1) as tf.SymbolicTensor;
+      recurrentInitializer: 'orthogonal',
+    }) as tf.RNN,
+  }).apply(memoryDropout) as tf.SymbolicTensor;
 
+  const pooled = attentionPooling(context, windowLength);
 
-  // Simplified Attention / Gating (Fix for TFJS Softmax axis limitation)
-  const attentionWeights = tf.layers.dense({ 
-    units: 1, 
-    activation: 'tanh',
-    kernelInitializer: 'glorotNormal'
-  }).apply(lstm2) as tf.SymbolicTensor;
-  
-  const flattenedWeights = tf.layers.flatten().apply(attentionWeights) as tf.SymbolicTensor;
-  const softWeights = tf.layers.softmax().apply(flattenedWeights) as tf.SymbolicTensor;
-  const reshapedWeights = tf.layers.reshape({ targetShape: [windowLength, 1] }).apply(softWeights) as tf.SymbolicTensor;
-  
-  const weighted = tf.layers.multiply().apply([lstm2, reshapedWeights]) as tf.SymbolicTensor;
-  const pooled = tf.layers.globalAveragePooling1d().apply(weighted) as tf.SymbolicTensor;
+  const dense = tf.layers.dense({
+    units: 64,
+    activation: 'relu',
+    kernelInitializer: 'heNormal',
+    kernelRegularizer: tf.regularizers.l2({ l2: 1e-4 }),
+  }).apply(pooled) as tf.SymbolicTensor;
 
-  const dense1 = tf.layers.dense({ units: 64, activation: 'relu', kernelInitializer: 'glorotNormal' }).apply(pooled) as tf.SymbolicTensor;
-  const output = tf.layers.dense({ units: numLabels, kernelInitializer: 'glorotNormal' }).apply(dense1) as tf.SymbolicTensor;
+  const dropped = tf.layers.dropout({ rate: 0.1 }).apply(dense) as tf.SymbolicTensor;
+  const output = tf.layers.dense({ units: numLabels, kernelInitializer: 'glorotNormal' }).apply(dropped) as tf.SymbolicTensor;
 
-  const model = tf.model({ inputs: input, outputs: output });
-
-  model.compile({
-    loss: 'meanAbsoluteError',
-    optimizer: tf.train.adam(0.0005),
-    metrics: ['accuracy']
-  });
-
-  return model;
+  return tf.model({ inputs: input, outputs: output, name: 'loto-elite' });
 }
 
+export function buildModel(mode: TrainingMode, windowLength: number, numFeatures = NUM_FEATURES, numLabels = NUM_LABELS) {
+  return mode === 'fast'
+    ? buildFastModel(windowLength, numFeatures, numLabels)
+    : buildAdvancedModel(windowLength, numFeatures, numLabels);
+}
 
+export interface TrainingConfig {
+  label: string;
+  tagline: string;
+  epochs: number;
+  batchSize: number;
+  learningRate: number;
+  minLearningRate: number;
+  validationSplit: number;
+  earlyStoppingPatience: number;
+  lrPlateauPatience: number;
+  lrPlateauFactor: number;
+  minDelta: number;
+}
 
+export const TRAINING_CONFIG: Record<TrainingMode, TrainingConfig> = {
+  fast: {
+    label: 'Turbo',
+    tagline: 'Quelques secondes, idéal au quotidien',
+    epochs: 24,
+    batchSize: 96,
+    learningRate: 1.5e-3,
+    minLearningRate: 2e-4,
+    validationSplit: 0.1,
+    earlyStoppingPatience: 6,
+    lrPlateauPatience: 2,
+    lrPlateauFactor: 0.5,
+    minDelta: 1e-4,
+  },
+  precise: {
+    label: 'Elite',
+    tagline: 'Analyse approfondie, meilleure stabilité',
+    epochs: 60,
+    batchSize: 64,
+    learningRate: 1e-3,
+    minLearningRate: 1e-4,
+    validationSplit: 0.1,
+    earlyStoppingPatience: 10,
+    lrPlateauPatience: 3,
+    lrPlateauFactor: 0.5,
+    minDelta: 5e-5,
+  },
+};
 
-export async function runBacktest(data: ProcessedDraw[], windowLength: number, testSize: number = 50, onProgress?: (p: number) => void) {
-  if (data.length <= testSize + windowLength) return null;
-  
-  // Split data
-  const trainData = data.slice(0, data.length - testSize);
-  const testData = data.slice(data.length - testSize - windowLength);
-  
-  const { X: xTrain, Y: yTrain, scaler } = createDataset(trainData, windowLength);
-  
-  // Preparer les donnees de test avec le MEME scaler
-  const testFeatures = testData.map(d => [
-    d.num0, d.num1, d.num2, d.num3, d.num4, d.chance,
-    d.freq_num0, d.freq_num1, d.freq_num2, d.freq_num3, d.freq_num4, d.freq_chance,
-    d.sum_diff, d.pair_chance, d.impair_chance, d.pair, d.impair, d.is_under_24, d.is_under_40,
-    d.last_seen_num0, d.last_seen_num1, d.last_seen_num2, d.last_seen_num3, d.last_seen_num4, d.last_seen_chance
-  ]);
-  const scaledTest = scaler.transform(testFeatures);
-  const XTest: number[][][] = [];
-  const YTest: number[][] = [];
-  
-  for (let i = 0; i < scaledTest.length - windowLength; i++) {
-    XTest.push(scaledTest.slice(i, i + windowLength));
-    YTest.push(scaledTest[i + windowLength].slice(0, 6));
-  }
-  
-  const model = buildAdvancedModel(windowLength, 25, 6);
-  
-  // Train
-  const xs = tf.tensor3d(xTrain);
-  const ys = tf.tensor2d(yTrain);
-  const epochs = 30; // Rapide pour le backtest
-  await model.fit(xs, ys, { 
-    epochs, 
-    batchSize: 32, 
-    shuffle: true,
-    callbacks: {
-      onEpochEnd: async (epoch) => {
-        if (onProgress) onProgress(Math.round(((epoch + 1) / epochs) * 100));
-        await tf.nextFrame(); // Permet à l'UI de respirer et d'éviter le message "Page ne répond pas"
+function compileModel(model: tf.LayersModel, mode: TrainingMode) {
+  const config = TRAINING_CONFIG[mode];
+  model.compile({
+    // Huber behaves like MAE for small errors and like MSE for outliers:
+    // robust against the occasional atypical draw.
+    loss: tf.losses.huberLoss,
+    optimizer: tf.train.adam(config.learningRate),
+    metrics: ['mae'],
+  });
+}
+
+/** (Re)compile a freshly built or freshly loaded model before fitting. */
+export function prepareForTraining(model: tf.LayersModel, mode: TrainingMode) {
+  compileModel(model, mode);
+}
+
+export function countTrainableParams(model: tf.LayersModel): number {
+  return model.countParams();
+}
+
+function setLearningRate(model: tf.LayersModel, value: number) {
+  const optimizer = model.optimizer as unknown as { learningRate?: number } | null;
+  if (optimizer && typeof optimizer.learningRate === 'number') optimizer.learningRate = value;
+}
+
+export interface EpochMetrics {
+  epoch: number;
+  totalEpochs: number;
+  loss: number;
+  valLoss: number | null;
+  bestValLoss: number | null;
+  learningRate: number;
+  durationMs: number;
+}
+
+export interface TrainHooks {
+  onEpochEnd?: (metrics: EpochMetrics) => void | Promise<void>;
+  shouldCancel?: () => boolean;
+}
+
+export interface TrainSummary {
+  epochsRun: number;
+  epochsRequested: number;
+  stoppedEarly: boolean;
+  bestValLoss: number | null;
+  finalLoss: number | null;
+  durationMs: number;
+  history: EpochMetrics[];
+}
+
+/**
+ * Fit a compiled model with validation split, early stopping, restore-best
+ * weights and a plateau learning-rate decay. Yields to the browser between
+ * epochs so the UI keeps painting during training.
+ *
+ * Early stopping is implemented here instead of via
+ * `tf.callbacks.earlyStopping({ restoreBestWeights: true })`: TensorFlow.js 4.x
+ * throws `restoreBestWeights = True is not implemented in EarlyStopping yet.`
+ * as soon as `fit` starts, which used to abort every training run.
+ */
+export async function trainModel(
+  model: tf.LayersModel,
+  X: number[][][],
+  Y: number[][],
+  mode: TrainingMode,
+  hooks: TrainHooks = {},
+): Promise<TrainSummary> {
+  const config = TRAINING_CONFIG[mode];
+  const xs = tf.tensor3d(X);
+  const ys = tf.tensor2d(Y);
+  const history: EpochMetrics[] = [];
+  const start = performance.now();
+  let epochStart = start;
+  let epochsRun = 0;
+  let bestValLoss: number | null = null;
+  let bestWeights: tf.Tensor[] | null = null;
+  let earlyWait = config.earlyStoppingPatience;
+  let plateauWait = config.lrPlateauPatience;
+  let learningRate = config.learningRate;
+  let stoppedEarly = false;
+
+  const uiCallback = new tf.CustomCallback({
+    onEpochBegin: async () => {
+      epochStart = performance.now();
+    },
+    onEpochEnd: async (epoch, logs) => {
+      epochsRun = epoch + 1;
+      const loss = typeof logs?.loss === 'number' ? logs.loss : Number.NaN;
+      const valLoss = typeof logs?.val_loss === 'number' ? logs.val_loss : null;
+
+      if (valLoss !== null) {
+        if (bestValLoss === null || valLoss < bestValLoss - config.minDelta) {
+          bestValLoss = valLoss;
+          // Snapshot the new best checkpoint (one snapshot kept at a time).
+          for (const tensor of bestWeights ?? []) tensor.dispose();
+          bestWeights = model.getWeights().map((weight) => weight.clone());
+          earlyWait = config.earlyStoppingPatience;
+          plateauWait = config.lrPlateauPatience;
+        } else {
+          earlyWait -= 1;
+          plateauWait -= 1;
+          if (plateauWait <= 0) {
+            learningRate = Math.max(learningRate * config.lrPlateauFactor, config.minLearningRate);
+            setLearningRate(model, learningRate);
+            plateauWait = config.lrPlateauPatience;
+          }
+          if (earlyWait <= 0) {
+            stoppedEarly = true;
+            model.stopTraining = true;
+          }
+        }
       }
-    }
+
+      const metrics: EpochMetrics = {
+        epoch: epochsRun,
+        totalEpochs: config.epochs,
+        loss,
+        valLoss,
+        bestValLoss,
+        learningRate,
+        durationMs: performance.now() - epochStart,
+      };
+      history.push(metrics);
+      await hooks.onEpochEnd?.(metrics);
+
+      if (hooks.shouldCancel?.()) model.stopTraining = true;
+      await tf.nextFrame();
+    },
   });
 
-  
-  // Predict
-  const xTestTensor = tf.tensor3d(XTest);
-  const predictions = model.predict(xTestTensor) as tf.Tensor;
-  const predArray = await predictions.array() as number[][];
-  
-  let totalBonsNumeros = 0;
-  let grillesGagnantes = 0; // Au moins 2 bons numeros ou le numero chance
-  
-  const means = scaler.means.slice(0, 6);
-  const stds = scaler.stds.slice(0, 6);
-  
-  for(let i=0; i<predArray.length; i++) {
-    const p = predArray[i].map((val, j) => Math.round((val * stds[j]) + means[j]));
-    const t = YTest[i].map((val, j) => Math.round((val * stds[j]) + means[j]));
-    
-    let bons = 0;
-    const vraisNumeros = t.slice(0,5);
-    for(let j=0; j<5; j++) {
-      if (vraisNumeros.includes(p[j])) bons++;
-    }
-    const chanceOk = p[5] === t[5];
-    
-    totalBonsNumeros += bons;
-    if (bons >= 2 || chanceOk) grillesGagnantes++;
+  try {
+    await model.fit(xs, ys, {
+      epochs: config.epochs,
+      batchSize: config.batchSize,
+      shuffle: true,
+      validationSplit: config.validationSplit,
+      callbacks: [uiCallback],
+      verbose: 0,
+    });
+
+    // Put the best checkpoint back: the saved model is the one that scored
+    // `bestValLoss`, not the last (possibly overfitted) set of weights.
+    if (bestWeights) model.setWeights(bestWeights);
+  } finally {
+    const checkpoints = bestWeights as tf.Tensor[] | null;
+    for (const tensor of checkpoints ?? []) tensor.dispose();
+    xs.dispose();
+    ys.dispose();
   }
-  
-  // Clean up tensors
-  xs.dispose();
-  ys.dispose();
-  xTestTensor.dispose();
-  predictions.dispose();
-  model.dispose();
-  
+
   return {
-    testSize: predArray.length,
-    avgBonsNumeros: (totalBonsNumeros / predArray.length).toFixed(2),
-    winRate: ((grillesGagnantes / predArray.length) * 100).toFixed(1)
+    epochsRun,
+    epochsRequested: config.epochs,
+    stoppedEarly: stoppedEarly || epochsRun < config.epochs,
+    bestValLoss,
+    finalLoss: history.length > 0 ? history[history.length - 1].loss : null,
+    durationMs: performance.now() - start,
+    history,
   };
 }
 
+// ---------------------------------------------------------------------------
+// Backtesting
+// ---------------------------------------------------------------------------
+
+export interface BacktestResult {
+  testSize: number;
+  avgMatches: number;
+  winRate: number;
+  chanceRate: number;
+  bestMatches: number;
+  distribution: Record<number, number>;
+}
+
+/**
+ * Train on the past, then replay the model over the last `testSize` real draws.
+ * The scaler is fitted on the training slice only, so the evaluation stays
+ * honest: nothing from the test window (not even its mean/variance) leaks in.
+ */
+export async function runBacktest(
+  processed: ProcessedDraw[],
+  windowLength: number,
+  testSize = 50,
+  onProgress?: (stage: 'training' | 'predicting', percent: number) => void,
+): Promise<BacktestResult | null> {
+  if (processed.length <= testSize + windowLength + 20) return null;
+
+  const splitIndex = processed.length - testSize;
+  const trainData = processed.slice(0, splitIndex);
+  const evalData = processed.slice(splitIndex - windowLength);
+
+  const { X, Y, scaler } = createDataset(trainData, windowLength);
+  const { X: XTest, Y: YTest } = buildScaledWindows(evalData, windowLength, scaler);
+  if (X.length === 0 || XTest.length === 0) return null;
+
+  const model = buildAdvancedModel(windowLength, NUM_FEATURES, NUM_LABELS);
+  prepareForTraining(model, 'precise');
+  const config = TRAINING_CONFIG.precise;
+
+  const xs = tf.tensor3d(X);
+  const ys = tf.tensor2d(Y);
+  const xTest = tf.tensor3d(XTest);
+  try {
+    await model.fit(xs, ys, {
+      epochs: Math.min(config.epochs, 30),
+      batchSize: config.batchSize,
+      shuffle: true,
+      validationSplit: config.validationSplit,
+      verbose: 0,
+      callbacks: {
+        onEpochEnd: async (epoch, logs) => {
+          onProgress?.('training', Math.round(((epoch + 1) / Math.min(config.epochs, 30)) * 70));
+          void logs;
+          await tf.nextFrame();
+        },
+      },
+    });
+
+    const predicted = model.predict(xTest) as tf.Tensor;
+    const rows = (await predicted.array()) as number[][];
+    onProgress?.('predicting', 100);
+
+    let totalMatches = 0;
+    let chanceHits = 0;
+    let wins = 0;
+    let bestMatches = 0;
+    const distribution: Record<number, number> = { 0: 0, 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
+
+    for (let i = 0; i < rows.length; i++) {
+      const prediction = scaler.inverseRow(rows[i]).map((value, j) => {
+        const rounded = Math.round(value);
+        return j < MAIN_COUNT
+          ? Math.min(MAX_MAIN, Math.max(MIN_MAIN, rounded))
+          : Math.min(MAX_CHANCE, Math.max(MIN_CHANCE, rounded));
+      });
+      const actual = scaler.inverseRow(YTest[i]).map((value) => Math.round(value));
+
+      // Distinct hits only: a duplicated prediction must not count twice.
+      const predictedMain = [...new Set(prediction.slice(0, MAIN_COUNT))];
+      const matched = predictedMain.filter((n) => actual.slice(0, MAIN_COUNT).includes(n)).length;
+      const chanceHit = prediction[MAIN_COUNT] === actual[MAIN_COUNT];
+
+      totalMatches += matched;
+      if (chanceHit) chanceHits++;
+      if (matched >= 2 || chanceHit) wins++;
+      if (matched > bestMatches) bestMatches = matched;
+      distribution[matched] = (distribution[matched] ?? 0) + 1;
+    }
+
+    const total = rows.length;
+    return {
+      testSize: total,
+      avgMatches: totalMatches / total,
+      winRate: (wins / total) * 100,
+      chanceRate: (chanceHits / total) * 100,
+      bestMatches,
+      distribution,
+    };
+  } finally {
+    xs.dispose();
+    ys.dispose();
+    xTest.dispose();
+    model.dispose();
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Runtime setup
+// ---------------------------------------------------------------------------
+
+/** Pick the fastest available backend and report its name. */
+export async function initTensorFlow(): Promise<string> {
+  await tf.ready();
+  const webgpuSupported = typeof navigator !== 'undefined' && 'gpu' in navigator;
+
+  if (webgpuSupported && tf.findBackend('webgpu')) {
+    try {
+      await tf.setBackend('webgpu');
+      await tf.ready();
+    } catch {
+      // Fall through to WebGL below.
+    }
+  }
+
+  if (tf.getBackend() !== 'webgpu' && tf.findBackend('webgl')) {
+    try {
+      await tf.setBackend('webgl');
+      await tf.ready();
+    } catch {
+      // Keep whatever backend works (CPU in the worst case).
+    }
+  }
+
+  return tf.getBackend();
+}

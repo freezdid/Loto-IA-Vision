@@ -2,266 +2,270 @@
 
 @theme {
   --font-sans: var(--font-dm-sans), "DM Sans", ui-sans-serif, system-ui, sans-serif;
-  
-  --color-background: #020511; /* Antigravity Deep Void */
-  --color-foreground: #f8fafc;
-  --color-primary: #0066cc; /* Electric Royal Blue */
-  --color-primary-hover: #0052a3;
-  --color-accent: #e1001a; /* Vivid Coral Red */
-  --color-chance: #ffd100; /* Gold Chance Ball */
-  --color-success: #10b981; /* Emerald Success / Win */
-  --color-panel: #060e24; /* Deep Space Panel */
-  --color-card: #0a1738; /* Elevated Spatial Card */
-  
-  --radius-3xl: 1.5rem;
+
+  /* Surfaces — one void, two elevations, nothing else */
+  --color-void: #020510;
+  --color-surface: #060e20;
+  --color-surface-2: #0b1630;
+  --color-line: rgba(255, 255, 255, 0.08);
+
+  /* Accents — royal blue carries the interface, gold is reserved for Chance */
+  --color-primary: #2f7df6;
+  --color-primary-deep: #1256b8;
+  --color-primary-soft: #8fbaff;
+  --color-chance: #ffd100;
+  --color-success: #23c98b;
+  --color-danger: #f2555a;
+
+  /* Text */
+  --color-ink: #f6f8fc;
+  --color-muted: #9fb0c9;
+  --color-faint: #7b8aa3;
+
+  --radius-panel: 1rem;
 }
 
 @layer base {
   * {
-    border-color: rgba(255, 255, 255, 0.08);
+    border-color: var(--color-line);
+  }
+
+  html {
+    color-scheme: dark;
   }
 
   body {
-    background-color: var(--color-background);
-    color: var(--color-foreground);
+    background-color: var(--color-void);
+    color: var(--color-ink);
     font-family: var(--font-sans);
+    font-feature-settings: "tnum" 1;
     min-height: 100vh;
     overflow-x: hidden;
-    background-image: 
-      radial-gradient(circle at 50% -10%, rgba(0, 102, 204, 0.22) 0%, transparent 60%),
-      radial-gradient(circle at 90% 85%, rgba(255, 209, 0, 0.05) 0%, transparent 50%),
-      radial-gradient(circle at 10% 90%, rgba(16, 185, 129, 0.04) 0%, transparent 45%),
-      radial-gradient(circle at 100% 10%, rgba(225, 0, 26, 0.04) 0%, transparent 40%);
+    background-image:
+      radial-gradient(1100px 520px at 50% -12%, rgba(47, 125, 246, 0.16) 0%, transparent 62%),
+      radial-gradient(760px 420px at 92% 88%, rgba(255, 209, 0, 0.045) 0%, transparent 60%);
     background-attachment: fixed;
   }
-}
 
-/* Antigravity Spatial Keyframe Animations */
-@keyframes antigravity-float {
-  0%, 100% {
-    transform: translateY(0px) rotate(0deg);
+  ::selection {
+    background: rgba(47, 125, 246, 0.32);
+    color: #ffffff;
   }
-  50% {
-    transform: translateY(-7px) rotate(0.4deg);
-  }
-}
 
-@keyframes shadow-breathe {
-  0%, 100% {
-    transform: scale(1);
-    opacity: 0.5;
+  :focus-visible {
+    outline: 2px solid var(--color-primary);
+    outline-offset: 2px;
+    border-radius: 8px;
   }
-  50% {
-    transform: scale(0.82);
-    opacity: 0.25;
-  }
-}
 
-@keyframes aura-glow {
-  0%, 100% {
-    opacity: 0.4;
-    transform: scale(1);
+  input,
+  button,
+  select,
+  textarea {
+    caret-color: var(--color-primary);
   }
-  50% {
-    opacity: 0.8;
-    transform: scale(1.15);
-  }
-}
 
-@keyframes shimmer-sweep {
-  0% {
-    transform: translateX(-100%);
+  input::placeholder {
+    color: var(--color-faint);
   }
-  100% {
-    transform: translateX(100%);
+
+  h1,
+  h2,
+  h3 {
+    text-wrap: balance;
   }
 }
 
 @layer components {
-  /* Spatial Perspective Containers */
-  .spatial-stage {
-    perspective: 1200px;
-    transform-style: preserve-3d;
+  /* Elevated surface: elevation is declared once (soft shadow + gradient),
+     never doubled with a decorative border. */
+  .panel {
+    position: relative;
+    border-radius: var(--radius-panel);
+    background:
+      linear-gradient(180deg, rgba(11, 22, 48, 0.92) 0%, rgba(6, 14, 32, 0.94) 100%);
+    box-shadow:
+      0 24px 48px -32px rgba(2, 5, 16, 0.95),
+      inset 0 1px 0 rgba(255, 255, 255, 0.05);
   }
 
-  /* Weightless Glass Panel */
-  .glass-panel {
-    background: linear-gradient(135deg, rgba(8, 17, 40, 0.78) 0%, rgba(12, 25, 54, 0.42) 100%);
-    backdrop-filter: blur(24px);
-    -webkit-backdrop-filter: blur(24px);
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    border-radius: 1.5rem;
-    box-shadow: 
-      0 20px 40px -15px rgba(0, 0, 0, 0.6),
-      0 0 1px 1px rgba(255, 255, 255, 0.05),
-      inset 0 1px 0 rgba(255, 255, 255, 0.1);
-    transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.3s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.3s ease;
+  .panel-flat {
+    border-radius: 0.75rem;
+    background: rgba(255, 255, 255, 0.035);
   }
 
-  .glass-panel:hover {
-    border-color: rgba(255, 255, 255, 0.16);
-    box-shadow: 
-      0 30px 60px -20px rgba(0, 102, 204, 0.25),
-      0 0 20px rgba(0, 102, 204, 0.1),
-      inset 0 1px 0 rgba(255, 255, 255, 0.15);
+  /* Small numeric stat block used inside panels */
+  .tile {
+    @apply rounded-xl px-3 py-2.5 text-center;
+    background: rgba(255, 255, 255, 0.035);
   }
 
-  /* Levitating Antigravity Elements */
-  .levitate-float {
-    animation: antigravity-float 5s ease-in-out infinite;
-    will-change: transform;
+  .tile-label {
+    @apply block text-[10px] font-bold uppercase tracking-[0.08em] text-faint;
   }
 
-  .levitate-shadow {
-    animation: shadow-breathe 5s ease-in-out infinite;
-    will-change: transform, opacity;
+  .tile-value {
+    @apply mt-1 block text-base font-extrabold text-ink tabular-nums;
   }
 
-  /* Interactive Buttons */
+  .chip {
+    @apply inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-bold;
+  }
+
   .btn-primary {
-    @apply inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl font-extrabold transition-all duration-300 cursor-pointer relative overflow-hidden select-none;
-    background: linear-gradient(135deg, #0077e6 0%, #0055a4 100%);
-    color: #ffffff;
-    box-shadow: 
-      0 6px 20px rgba(0, 102, 204, 0.4),
-      inset 0 1px 0 rgba(255, 255, 255, 0.3);
-  }
-  .btn-primary::after {
-    content: '';
-    position: absolute;
-    top: 0; left: 0; right: 0; bottom: 0;
-    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
-    transform: translateX(-100%);
-    transition: transform 0.6s ease;
-  }
-  .btn-primary:hover:not(:disabled)::after {
-    transform: translateX(100%);
+    @apply inline-flex items-center justify-center gap-2 rounded-xl px-5 py-3 text-sm font-extrabold text-white transition-[transform,box-shadow,background-color] duration-200 select-none cursor-pointer disabled:opacity-45 disabled:cursor-not-allowed disabled:transform-none;
+    background-color: var(--color-primary-deep);
+    background-image: linear-gradient(180deg, #1f6ae0 0%, #0f4aa5 100%);
+    box-shadow:
+      0 10px 22px -12px rgba(18, 86, 184, 0.9),
+      inset 0 1px 0 rgba(255, 255, 255, 0.22);
   }
   .btn-primary:hover:not(:disabled) {
-    transform: translateY(-2px) scale(1.02);
-    box-shadow: 
-      0 10px 28px rgba(0, 102, 204, 0.55),
-      inset 0 1px 0 rgba(255, 255, 255, 0.4);
+    transform: translateY(-1px);
+    box-shadow:
+      0 14px 28px -12px rgba(47, 125, 246, 0.95),
+      inset 0 1px 0 rgba(255, 255, 255, 0.28);
   }
   .btn-primary:active:not(:disabled) {
-    transform: translateY(1px) scale(0.98);
-  }
-  .btn-primary:disabled {
-    @apply opacity-50 cursor-not-allowed;
+    transform: translateY(1px);
   }
 
   .btn-ghost {
-    @apply inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl font-bold transition-all duration-200 cursor-pointer select-none;
-    background: rgba(255, 255, 255, 0.04);
-    color: #cbd5e1;
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    backdrop-filter: blur(10px);
+    @apply inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-bold text-muted transition-colors duration-200 select-none cursor-pointer disabled:opacity-45 disabled:cursor-not-allowed;
+    background: rgba(255, 255, 255, 0.045);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
   }
   .btn-ghost:hover:not(:disabled) {
     background: rgba(255, 255, 255, 0.09);
-    color: #ffffff;
-    border-color: rgba(255, 255, 255, 0.18);
-    transform: translateY(-1px);
-  }
-  .btn-ghost:disabled {
-    @apply opacity-40 cursor-not-allowed;
+    color: var(--color-ink);
   }
 
-  /* 3D Photorealistic Loto Balls with Optical Depth */
+  /* 3D Loto balls — the one place the interface is allowed to be playful */
   .number-ball {
-    @apply flex items-center justify-center rounded-full font-black text-white relative select-none cursor-pointer;
+    @apply relative flex select-none items-center justify-center rounded-full font-black text-white;
     width: 3.5rem;
     height: 3.5rem;
     font-size: 1.35rem;
-    letter-spacing: -0.04em;
-    background: radial-gradient(circle at 30% 25%, #47a6ff 0%, #0066cc 38%, #00366b 80%, #001c38 100%);
-    box-shadow: 
-      0 10px 20px -3px rgba(0, 0, 0, 0.6),
-      0 4px 12px rgba(0, 102, 204, 0.45),
-      inset 0 -5px 8px rgba(0, 0, 0, 0.45),
-      inset 0 4px 6px rgba(255, 255, 255, 0.65);
-    border: 1px solid rgba(255, 255, 255, 0.25);
-    transform-style: preserve-3d;
-    transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.25s ease;
+    letter-spacing: -0.03em;
+    font-variant-numeric: tabular-nums;
+    background: radial-gradient(circle at 30% 24%, #5cb0ff 0%, #1a70d8 40%, #0b2f63 82%, #061a36 100%);
+    box-shadow:
+      0 12px 20px -8px rgba(2, 5, 16, 0.9),
+      inset 0 -6px 10px rgba(2, 5, 16, 0.45),
+      inset 0 5px 7px rgba(255, 255, 255, 0.5);
+    cursor: pointer;
   }
 
-  .number-ball:hover {
-    transform: translateY(-6px) scale(1.12);
-    box-shadow: 
-      0 16px 28px -4px rgba(0, 0, 0, 0.7),
-      0 0 24px rgba(0, 102, 204, 0.6),
-      inset 0 -5px 8px rgba(0, 0, 0, 0.45),
-      inset 0 4px 6px rgba(255, 255, 255, 0.8);
-  }
-
-  /* 3D Gold Chance Ball */
   .number-ball.chance {
-    color: #1a1500;
-    background: radial-gradient(circle at 30% 25%, #fff6b3 0%, #ffd100 38%, #e09900 80%, #805200 100%);
-    box-shadow: 
-      0 10px 22px -3px rgba(0, 0, 0, 0.6),
-      0 0 25px rgba(255, 209, 0, 0.5),
-      inset 0 -5px 8px rgba(128, 82, 0, 0.55),
-      inset 0 4px 6px rgba(255, 255, 255, 0.9);
-    border: 1px solid rgba(255, 240, 170, 0.45);
+    color: #221a00;
+    background: radial-gradient(circle at 30% 24%, #fff4ad 0%, #ffd100 42%, #d99b00 82%, #7c5600 100%);
+    box-shadow:
+      0 12px 22px -8px rgba(2, 5, 16, 0.9),
+      0 0 22px rgba(255, 209, 0, 0.28),
+      inset 0 -6px 10px rgba(124, 86, 0, 0.45),
+      inset 0 5px 7px rgba(255, 255, 255, 0.75);
   }
 
-  .number-ball.chance:hover {
-    transform: translateY(-6px) scale(1.12);
-    box-shadow: 
-      0 16px 30px -4px rgba(0, 0, 0, 0.7),
-      0 0 35px rgba(255, 209, 0, 0.75),
-      inset 0 -5px 8px rgba(128, 82, 0, 0.55),
-      inset 0 4px 6px rgba(255, 255, 255, 1);
-  }
-
-  /* Compact variant for lists & history */
   .number-ball-sm {
-    @apply flex items-center justify-center rounded-full font-black text-white relative select-none;
-    width: 2.35rem;
-    height: 2.35rem;
-    font-size: 0.9rem;
-    letter-spacing: -0.02em;
-    background: radial-gradient(circle at 30% 25%, #47a6ff 0%, #0066cc 45%, #002b54 100%);
-    box-shadow: 
-      0 4px 10px rgba(0, 0, 0, 0.45),
-      0 2px 5px rgba(0, 102, 204, 0.3),
-      inset 0 2px 3px rgba(255, 255, 255, 0.5);
-    border: 1px solid rgba(255, 255, 255, 0.2);
-    transition: transform 0.2s ease;
+    @apply relative flex select-none items-center justify-center rounded-full font-black text-white;
+    width: 2.1rem;
+    height: 2.1rem;
+    font-size: 0.82rem;
+    font-variant-numeric: tabular-nums;
+    background: radial-gradient(circle at 30% 24%, #4aa3ff 0%, #1a70d8 55%, #0a2856 100%);
+    box-shadow:
+      0 4px 9px -3px rgba(2, 5, 16, 0.85),
+      inset 0 2px 3px rgba(255, 255, 255, 0.42);
   }
 
   .number-ball-sm.chance {
-    color: #1a1500;
-    background: radial-gradient(circle at 30% 25%, #fff6b3 0%, #ffd100 45%, #a66a00 100%);
-    box-shadow: 
-      0 4px 10px rgba(0, 0, 0, 0.45),
-      0 0 14px rgba(255, 209, 0, 0.4),
-      inset 0 2px 3px rgba(255, 255, 255, 0.75);
-    border: 1px solid rgba(255, 240, 170, 0.35);
+    color: #221a00;
+    background: radial-gradient(circle at 30% 24%, #fff4ad 0%, #ffd100 55%, #b57d00 100%);
+    box-shadow:
+      0 4px 9px -3px rgba(2, 5, 16, 0.85),
+      0 0 12px rgba(255, 209, 0, 0.3),
+      inset 0 2px 3px rgba(255, 255, 255, 0.6);
   }
 
-  /* Ball Socket / Pedestal Shadow */
+  /* Soft contact shadow under a levitating ball */
   .ball-pedestal {
-    width: 2.5rem;
-    height: 0.65rem;
-    background: radial-gradient(ellipse at center, rgba(0, 0, 0, 0.7) 0%, transparent 75%);
+    width: 2.4rem;
+    height: 0.6rem;
+    background: radial-gradient(ellipse at center, rgba(2, 5, 16, 0.85) 0%, transparent 72%);
     border-radius: 50%;
   }
 
-  /* Custom Sleek Scrollbar */
+  /* Entrance + float + tap are authored in CSS: no render-time branching on
+     prefers-reduced-motion, so SSR and hydration stay in sync. */
+  .ball-in {
+    animation: ball-in 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+
+  .ball-float {
+    animation: ball-float 4.6s ease-in-out infinite;
+  }
+
+  .ball-tap {
+    transition:
+      scale 0.18s ease,
+      transform 0.7s cubic-bezier(0.2, 0.85, 0.3, 1);
+  }
+
+  .skeleton {
+    @apply animate-pulse rounded-xl;
+    background: rgba(255, 255, 255, 0.05);
+  }
+
   .custom-scrollbar::-webkit-scrollbar {
-    width: 6px;
-    height: 6px;
+    width: 8px;
+    height: 8px;
   }
   .custom-scrollbar::-webkit-scrollbar-track {
-    background: rgba(255, 255, 255, 0.02);
+    background: transparent;
   }
   .custom-scrollbar::-webkit-scrollbar-thumb {
-    background: rgba(255, 255, 255, 0.12);
+    background: rgba(255, 255, 255, 0.14);
     border-radius: 9999px;
+    border: 2px solid transparent;
+    background-clip: content-box;
   }
   .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-    background: rgba(255, 255, 255, 0.25);
+    background: rgba(255, 255, 255, 0.28);
+    background-clip: content-box;
+  }
+
+  .tabular {
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+@keyframes ball-in {
+  from {
+    opacity: 0;
+    transform: translateY(14px) scale(0.86);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes ball-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-5px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
   }
 }

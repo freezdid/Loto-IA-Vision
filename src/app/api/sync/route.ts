@@ -1,31 +1,44 @@
 import { NextResponse } from 'next/server';
-import { saveToBlob, loadFromBlob } from '@/lib/blob';
+import { loadFromBlob, saveToBlob } from '@/lib/blob';
+import { errorMessage } from '@/lib/errors';
 
-export async function GET(req: Request) {
+type SyncType = 'draws' | 'predictions' | 'model';
+
+const PATHS: Record<SyncType, string> = {
+  draws: 'loto_history.json',
+  predictions: 'predictions_history.json',
+  model: 'loto_model_meta.json',
+};
+
+function resolveType(value: string | null): SyncType {
+  return value === 'predictions' || value === 'model' ? value : 'draws';
+}
+
+export async function GET(request: Request) {
   try {
-    const { searchParams } = new URL(req.url);
-    const type = searchParams.get('type') || 'draws';
-    let path = 'loto_history.json';
-    if (type === 'predictions') path = 'predictions_history.json';
-    if (type === 'model') path = 'loto_model_meta.json';
-    
-    const data = await loadFromBlob(path);
-    return NextResponse.json({ success: true, data: data || [] });
-  } catch (error: any) {
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+    const type = resolveType(new URL(request.url).searchParams.get('type'));
+    const data = await loadFromBlob<unknown[]>(PATHS[type]);
+    return NextResponse.json({ success: true, type, count: Array.isArray(data) ? data.length : 0, data: data ?? [] });
+  } catch (error) {
+    return NextResponse.json({ success: false, error: errorMessage(error) }, { status: 500 });
   }
 }
 
-export async function POST(req: Request) {
+export async function POST(request: Request) {
   try {
-    const { data, type } = await req.json();
-    let path = 'loto_history.json';
-    if (type === 'predictions') path = 'predictions_history.json';
-    if (type === 'model') path = 'loto_model_meta.json';
-    
-    const url = await saveToBlob(data, path);
-    return NextResponse.json({ success: true, url });
-  } catch (error: any) {
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+    const body = (await request.json()) as { data?: unknown; type?: string };
+    if (!Array.isArray(body.data)) {
+      return NextResponse.json({ success: false, error: 'Champ "data" attendu (tableau)' }, { status: 400 });
+    }
+
+    const type = resolveType(body.type ?? null);
+    const url = await saveToBlob(body.data, PATHS[type]);
+    if (!url) {
+      return NextResponse.json({ success: false, error: 'Synchronisation cloud indisponible' }, { status: 502 });
+    }
+
+    return NextResponse.json({ success: true, type, count: body.data.length, url });
+  } catch (error) {
+    return NextResponse.json({ success: false, error: errorMessage(error) }, { status: 500 });
   }
 }

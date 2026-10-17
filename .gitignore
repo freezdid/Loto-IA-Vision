@@ -46,3 +46,6 @@ next-env.d.ts
 *.sqlite
 *.sqlite3
 
+
+# agent tooling
+/.open-mem

@@ -1,37 +1,22 @@
 import { NextResponse } from 'next/server';
 import { scrapeLatestDraws } from '@/lib/scraper';
-import { saveDrawsToDB, getAllDrawsFromDB } from '@/lib/db';
+import { getAllDraws, saveDraws } from '@/lib/db';
+import { mergeDraws, sortDrawsByDate } from '@/lib/loto';
+import { errorMessage } from '@/lib/errors';
 
+/** Full history, newest draw first. */
 export async function GET() {
   try {
-    const scrapedResults = await scrapeLatestDraws();
+    const scraped = await scrapeLatestDraws();
+    await saveDraws(scraped);
 
-    // Save to SQLite if local environment allows
-    try {
-      if (scrapedResults.length > 0) {
-        saveDrawsToDB(scrapedResults);
-      }
-    } catch (dbError) {
-      console.warn("Database save notice (serverless mode):", dbError);
-    }
+    // The local database can hold draws older than the scraped page: keep both.
+    const stored = await getAllDraws();
+    const results = sortDrawsByDate(mergeDraws(scraped, stored), 'desc');
 
-    // Get full history from DB or fallback directly to scraped results
-    let results: any[] = [];
-    try {
-      results = getAllDrawsFromDB();
-      if (results.length === 0 && scrapedResults.length > 0) {
-        results = scrapedResults;
-      }
-    } catch (dbError) {
-      results = scrapedResults;
-    }
-
-    return NextResponse.json({ success: true, results });
-  } catch (error: any) {
-    console.error("Scraping route error:", error);
-    return NextResponse.json({ 
-      success: false, 
-      error: error.message 
-    }, { status: 500 });
+    return NextResponse.json({ success: true, count: results.length, results });
+  } catch (error) {
+    console.error('Scraping route error:', error);
+    return NextResponse.json({ success: false, error: errorMessage(error) }, { status: 502 });
   }
 }
