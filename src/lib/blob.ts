@@ -1,14 +1,16 @@
-import { put, list } from '@vercel/blob';
+import { get, put } from '@vercel/blob';
 
 /**
  * Upload (or overwrite) a JSON document in Vercel Blob.
+ * The store is configured as **private** (Vercel dashboard), so both writes
+ * and reads stay authenticated; public URLs are never exposed.
  * `allowOverwrite` is required: without it Blob throws as soon as the pathname
  * already exists, which used to make every sync silently fail.
  */
 export async function saveToBlob(data: unknown, pathname: string): Promise<string | null> {
   try {
     const { url } = await put(pathname, JSON.stringify(data), {
-      access: 'public',
+      access: 'private',
       addRandomSuffix: false,
       allowOverwrite: true,
       contentType: 'application/json',
@@ -21,16 +23,12 @@ export async function saveToBlob(data: unknown, pathname: string): Promise<strin
   }
 }
 
-/** Read a JSON document from Vercel Blob, bypassing every cache layer. */
+/** Read a JSON document from the private Vercel Blob store. */
 export async function loadFromBlob<T = unknown>(pathname: string): Promise<T | null> {
   try {
-    const { blobs } = await list({ prefix: pathname, limit: 1 });
-    const blob = blobs.find((entry) => entry.pathname === pathname);
-    if (!blob) return null;
-
-    const response = await fetch(blob.url, { cache: 'no-store' });
-    if (!response.ok) return null;
-    return (await response.json()) as T;
+    const result = await get(pathname, { access: 'private', useCache: false });
+    if (!result || result.statusCode !== 200) return null;
+    return (await new Response(result.stream).json()) as T;
   } catch (error) {
     console.error(`Vercel Blob download failed [${pathname}]:`, error);
     return null;
