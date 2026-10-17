@@ -46,6 +46,13 @@ next-env.d.ts
 *.sqlite
 *.sqlite3
 
+# python tooling caches
+__pycache__/
+*.pyc
+
+# OS metadata
+Thumbs.db
 
 # agent tooling
 /.open-mem
+/.agents
