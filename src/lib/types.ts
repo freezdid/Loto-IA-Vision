@@ -46,7 +46,7 @@ export interface ProcessedDraw extends LotoDraw {
 export interface SavedPrediction {
   timestamp: string;
   grilles: number[][];
-  /** Statistical conformity score (0-100) for each grid, when available. */
+  /** Statistical conformity score (1-99 percentile) for each grid, when available. */
   scores?: number[];
 }
 

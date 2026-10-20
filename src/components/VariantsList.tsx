@@ -10,13 +10,16 @@ interface VariantsListProps {
   onGridCountChange: (count: number) => void;
   onCopy: (numbers: number[], chance: number) => void;
   isGenerating: boolean;
-  onGenerate: () => void;
+  onGenerate: (count?: number) => void;
 }
 
 const COUNT_OPTIONS = [1, 2, 3, 5];
 
 export function VariantsList({ grids, gridCount, onGridCountChange, onCopy, isGenerating, onGenerate }: VariantsListProps) {
-  const variants = grids.slice(1);
+  const variants = grids.slice(1, gridCount);
+  const coveredGrids = grids.slice(0, Math.max(1, gridCount));
+  const coveredNumbers = new Set(coveredGrids.flatMap((grid) => grid.numbers)).size;
+  const coveredChances = new Set(coveredGrids.map((grid) => grid.chance)).size;
 
   return (
     <section aria-label="Autres grilles" className="panel space-y-4 p-5 sm:p-6">
@@ -27,6 +30,12 @@ export function VariantsList({ grids, gridCount, onGridCountChange, onCopy, isGe
             Autres grilles
           </h2>
           <p className="mt-1 text-[12px] text-muted">Combinaisons complémentaires, classées par conformité</p>
+          {coveredGrids.length > 1 && (
+            <p className="mt-1 text-[11px] tabular text-faint">
+              {coveredNumbers} numéros distincts ·{' '}
+              {coveredChances > 1 ? `${coveredChances} boules Chance différentes` : '1 boule Chance'}
+            </p>
+          )}
         </div>
 
         <div className="flex items-center gap-1.5" role="group" aria-label="Nombre de grilles">
@@ -37,7 +46,7 @@ export function VariantsList({ grids, gridCount, onGridCountChange, onCopy, isGe
               type="button"
               onClick={() => {
                 onGridCountChange(value);
-                if (value > 1) onGenerate();
+                if (value > 1) onGenerate(value);
               }}
               aria-pressed={gridCount === value}
               className={`rounded-lg px-3 py-1.5 text-xs font-extrabold tabular transition-colors ${

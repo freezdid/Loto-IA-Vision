@@ -6,7 +6,7 @@ import { GridAnalysis, StatsProfile, randomGrid, scoreGrid } from './stats';
 export interface PredictionGrid {
   numbers: number[];
   chance: number;
-  /** Statistical conformity score (0-100). */
+  /** Statistical conformity score (1-99 percentile). */
   score: number;
   analysis: GridAnalysis;
   reasons: string[];
@@ -25,12 +25,25 @@ export interface GenerationOptions {
 
 const ROUNDS = 4;
 const MAX_GRIDS = 10;
+const SIGMAS = [3, 7];
+
+interface Priors {
+  main: number[];
+  chance: number[];
+}
 
 /**
- * Monte-Carlo style decoding: the model is asked for many candidate grids with
- * a growing amount of controlled noise, then the candidates are ranked by their
- * statistical conformity with the real history. Ensemble scoring keeps the
- * output stable instead of trusting a single noisy prediction.
+ * Monte-Carlo decoding with model-guided sampling.
+ *
+ * The LSTM output is treated as a set of position estimates. For every row we
+ * keep the direct rounded grid and draw two broader samples from a Gaussian
+ * mixture around those positions, tempered by the real frequency of each
+ * number. This produces valid, varied candidates instead of near-identical
+ * rows that would need an arbitrary duplicate repair.
+ *
+ * The final set is selected for conformity *and* diversity: five grids that
+ * all share the same numbers cover far less ground than five complementary
+ * ones. The score stays a statistical percentile, never a win probability.
  */
 export async function generatePredictions(options: GenerationOptions): Promise<PredictionGrid[]> {
   const { model, lastWindow, scaler, profile } = options;
@@ -38,7 +51,16 @@ export async function generatePredictions(options: GenerationOptions): Promise<P
 
   const target = clamp(Math.round(options.count), 1, MAX_GRIDS);
   const perRound = Math.max(96, target * 12);
+  const priors = buildPriors(profile);
+  const rng = Math.random;
   const candidates = new Map<string, PredictionGrid>();
+
+  const addCandidate = (grid: { numbers: number[]; chance: number }) => {
+    const key = `${grid.numbers.join(',')}|${grid.chance}`;
+    if (candidates.has(key)) return;
+    const { score, analysis, reasons } = scoreGrid([...grid.numbers, grid.chance], profile);
+    candidates.set(key, { ...grid, score, analysis, reasons });
+  };
 
   for (let round = 0; round < ROUNDS; round++) {
     if (options.shouldCancel?.()) break;
@@ -55,12 +77,16 @@ export async function generatePredictions(options: GenerationOptions): Promise<P
     });
 
     for (const row of rows) {
-      const grid = decodeRow(row, scaler);
-      if (!grid) continue;
-      const key = `${grid.numbers.join(',')}|${grid.chance}`;
-      if (candidates.has(key)) continue;
-      const { score, analysis, reasons } = scoreGrid([...grid.numbers, grid.chance], profile);
-      candidates.set(key, { ...grid, score, analysis, reasons });
+      if (!row || row.length < MAIN_COUNT + 1) continue;
+      if (!row.slice(0, MAIN_COUNT + 1).every((value) => Number.isFinite(value))) continue;
+
+      const direct = decodeRow(row, scaler);
+      if (direct) addCandidate(direct);
+
+      const real = scaler.inverseRow(row.slice(0, MAIN_COUNT + 1));
+      for (const sigma of SIGMAS) {
+        addCandidate(sampleFromModel(real, priors, rng, sigma * (1 + round * 0.15)));
+      }
     }
 
     options.onProgress?.(Math.round(((round + 1) / ROUNDS) * 100));
@@ -85,7 +111,106 @@ export async function generatePredictions(options: GenerationOptions): Promise<P
     });
   }
 
-  return [...candidates.values()].sort((a, b) => b.score - a.score).slice(0, target);
+  return selectDiverse([...candidates.values()], target);
+}
+
+/** Blend the historical frequency of each number into a mild prior (~1 on average). */
+function buildPriors(profile: StatsProfile): Priors {
+  const counts = profile.frequency.counts;
+  const chanceCounts = profile.frequency.chanceCounts;
+  const mainTotal = Object.values(counts).reduce((total, value) => total + value, 0) || 1;
+  const chanceTotal = Object.values(chanceCounts).reduce((total, value) => total + value, 0) || 1;
+  const alpha = 2;
+
+  const main = Array.from({ length: MAX_MAIN }, (_, index) => {
+    const number = index + 1;
+    return ((counts[number] ?? 0) + alpha) / (mainTotal + alpha * MAX_MAIN);
+  });
+
+  const chanceSize = MAX_CHANCE - MIN_CHANCE + 1;
+  const chance = Array.from({ length: chanceSize }, (_, index) => {
+    const number = index + MIN_CHANCE;
+    return ((chanceCounts[number] ?? 0) + alpha) / (chanceTotal + alpha * chanceSize);
+  });
+
+  return { main, chance };
+}
+
+/** Draw a valid grid from a Gaussian mixture around the model's position estimates. */
+function sampleFromModel(
+  real: number[],
+  priors: Priors,
+  rng: () => number,
+  sigma: number,
+): { numbers: number[]; chance: number } {
+  const positions = real.slice(0, MAIN_COUNT).map((value) => clamp(value, MIN_MAIN, MAX_MAIN));
+  const weights = new Array<number>(MAX_MAIN).fill(0);
+
+  for (let number = MIN_MAIN; number <= MAX_MAIN; number++) {
+    let kernel = 0;
+    for (const position of positions) {
+      const distance = number - position;
+      kernel += Math.exp(-0.5 * (distance / sigma) ** 2);
+    }
+    const prior = Math.pow(priors.main[number - MIN_MAIN] * MAX_MAIN, 0.35);
+    weights[number - MIN_MAIN] = (kernel + 0.01) * prior;
+  }
+
+  const chanceValue = clamp(real[MAIN_COUNT], MIN_CHANCE, MAX_CHANCE);
+  const chanceSize = MAX_CHANCE - MIN_CHANCE + 1;
+  const chanceWeights = new Array<number>(chanceSize).fill(0);
+  for (let number = MIN_CHANCE; number <= MAX_CHANCE; number++) {
+    const kernel = Math.exp(-0.5 * ((number - chanceValue) / Math.max(1, sigma * 0.5)) ** 2);
+    const prior = Math.pow(priors.chance[number - MIN_CHANCE] * chanceSize, 0.3);
+    chanceWeights[number - MIN_CHANCE] = (kernel + 0.02) * prior;
+  }
+
+  return {
+    numbers: sampleDistinct(weights, MAIN_COUNT, rng),
+    chance: sampleWeighted(chanceWeights, rng) + MIN_CHANCE,
+  };
+}
+
+/** Weighted sampling without replacement: five distinct main numbers. */
+function sampleDistinct(weights: number[], count: number, rng: () => number): number[] {
+  const pool = weights.slice();
+  const picked: number[] = [];
+
+  for (let index = 0; index < count; index++) {
+    let total = 0;
+    for (const weight of pool) total += weight;
+    if (total <= 0) break;
+
+    let target = rng() * total;
+    let position = 0;
+    while (position < pool.length - 1 && target > pool[position]) {
+      target -= pool[position];
+      position++;
+    }
+    picked.push(position + MIN_MAIN);
+    pool[position] = 0;
+  }
+
+  while (picked.length < count) {
+    const candidate = MIN_MAIN + Math.floor(rng() * (MAX_MAIN - MIN_MAIN + 1));
+    if (!picked.includes(candidate)) picked.push(candidate);
+  }
+
+  return picked.sort((a, b) => a - b);
+}
+
+function sampleWeighted(weights: number[], rng: () => number): number {
+  let total = 0;
+  for (const weight of weights) total += weight;
+  if (total <= 0) return Math.floor(rng() * weights.length);
+
+  let target = rng() * total;
+  let index = 0;
+  while (index < weights.length - 1 && target > weights[index]) {
+    target -= weights[index];
+    index++;
+  }
+  return index;
 }
 
 /** Scale back a model row and repair it into a valid, unique 5 + chance grid. */
@@ -119,4 +244,43 @@ function repairMainNumbers(values: number[]): number[] {
   }
 
   return result.sort((a, b) => a - b);
+}
+
+/**
+ * Pick the requested grids while keeping them complementary: a candidate that
+ * shares numbers with an already selected grid pays a penalty, so the second
+ * and third grids actually add coverage instead of echoing the first one.
+ */
+function selectDiverse(candidates: PredictionGrid[], target: number): PredictionGrid[] {
+  const sorted = [...candidates].sort((a, b) => b.score - a.score);
+  if (sorted.length <= target || target === 1) return sorted.slice(0, Math.max(1, target));
+
+  const selected: PredictionGrid[] = [sorted[0]];
+  const remaining = sorted.slice(1);
+
+  while (selected.length < target && remaining.length > 0) {
+    let bestIndex = 0;
+    let bestObjective = -Infinity;
+    for (let index = 0; index < remaining.length; index++) {
+      const overlap = maxOverlap(remaining[index], selected);
+      const objective = remaining[index].score - overlap * 35;
+      if (objective > bestObjective) {
+        bestObjective = objective;
+        bestIndex = index;
+      }
+    }
+    selected.push(remaining.splice(bestIndex, 1)[0]);
+  }
+
+  return selected.sort((a, b) => b.score - a.score);
+}
+
+function maxOverlap(candidate: PredictionGrid, selected: PredictionGrid[]): number {
+  let max = 0;
+  for (const grid of selected) {
+    const shared = candidate.numbers.filter((number) => grid.numbers.includes(number)).length;
+    const chance = candidate.chance === grid.chance ? 0.25 : 0;
+    max = Math.max(max, shared + chance);
+  }
+  return max;
 }

@@ -27,7 +27,7 @@ export default function StudioPage() {
   }, [engine.draws]);
 
   const lastMetric = engine.training.history[engine.training.history.length - 1];
-  const validationLoss = engine.training.bestValLoss ?? lastMetric?.valLoss ?? null;
+  const validationLoss = engine.training.bestValMae ?? lastMetric?.valMae ?? null;
   const primaryGrid = engine.grids[0] ?? null;
 
   return (
@@ -74,7 +74,7 @@ export default function StudioPage() {
               onGridCountChange={engine.setGridCount}
               onCopy={(numbers, chance) => void engine.copyGrid(numbers, chance)}
               isGenerating={engine.isGenerating}
-              onGenerate={() => void engine.generate()}
+              onGenerate={(count) => void engine.generate(count)}
             />
           </div>
 
@@ -84,6 +84,8 @@ export default function StudioPage() {
               onModeChange={engine.setMode}
               windowLength={engine.windowLength}
               onWindowChange={engine.setWindowLength}
+              fullTraining={engine.fullTraining}
+              onFullTrainingChange={engine.setFullTraining}
               training={engine.training}
               model={engine.model}
               drawCount={engine.draws.length}

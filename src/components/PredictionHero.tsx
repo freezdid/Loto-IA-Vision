@@ -4,6 +4,7 @@ import { motion } from 'framer-motion';
 import { Copy, Play, Sparkles, Target } from 'lucide-react';
 import { BallGroup } from './LevitatingBall';
 import { SpatialCard } from './SpatialCard';
+import { CONFORMITY_NULL_SAMPLES } from '@/lib/stats';
 import type { PredictionGrid } from '@/lib/predict';
 
 interface PredictionHeroProps {
@@ -49,7 +50,10 @@ export function PredictionHero({
         </div>
 
         {grid && (
-          <span className={`chip ${scoreTone(grid.score)}`} title="Proximité statistique avec l'historique, pas une probabilité de gain">
+          <span
+            className={`chip ${scoreTone(grid.score)}`}
+            title={`Percentile de conformité sur ${CONFORMITY_NULL_SAMPLES.toLocaleString('fr-FR')} grilles aléatoires — pas une probabilité de gain`}
+          >
             <Sparkles className="h-3.5 w-3.5" aria-hidden />
             Conformité {grid.score}%
           </span>

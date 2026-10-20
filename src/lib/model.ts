@@ -150,10 +150,24 @@ export interface Dataset {
   lastWindow: number[][];
 }
 
-/** Build sliding windows over a series of processed draws. */
-export function createDataset(processed: ProcessedDraw[], windowLength: number): Dataset {
+/**
+ * Build sliding windows over a series of processed draws.
+ *
+ * When `validationSplit` is greater than zero, the scaler is fitted on the
+ * training slice only: the validation tail must stay unseen, including its
+ * mean and variance. This keeps the reported validation loss honest.
+ */
+export function createDataset(
+  processed: ProcessedDraw[],
+  windowLength: number,
+  validationSplit = 0,
+): Dataset {
   const features = processed.map(drawToFeatures);
-  const scaler = new StandardScaler().fit(features);
+  const fitRows =
+    validationSplit > 0
+      ? features.slice(0, Math.max(1, Math.floor(features.length * (1 - validationSplit))))
+      : features;
+  const scaler = new StandardScaler().fit(fitRows);
   return {
     ...buildScaledWindows(processed, windowLength, scaler),
     scaler,
@@ -384,7 +398,11 @@ export interface EpochMetrics {
   totalEpochs: number;
   loss: number;
   valLoss: number | null;
+  mae: number;
+  valMae: number | null;
   bestValLoss: number | null;
+  bestEpoch: number | null;
+  bestValMae: number | null;
   learningRate: number;
   durationMs: number;
 }
@@ -392,13 +410,20 @@ export interface EpochMetrics {
 export interface TrainHooks {
   onEpochEnd?: (metrics: EpochMetrics) => void | Promise<void>;
   shouldCancel?: () => boolean;
+  /** Override the configured epoch count (used by the backtest). */
+  maxEpochs?: number;
+  /** When false, every epoch runs and the best checkpoint is restored at the end. */
+  allowEarlyStop?: boolean;
 }
 
 export interface TrainSummary {
   epochsRun: number;
   epochsRequested: number;
   stoppedEarly: boolean;
+  cancelled: boolean;
   bestValLoss: number | null;
+  bestValMae: number | null;
+  bestEpoch: number | null;
   finalLoss: number | null;
   durationMs: number;
   history: EpochMetrics[];
@@ -422,6 +447,8 @@ export async function trainModel(
   hooks: TrainHooks = {},
 ): Promise<TrainSummary> {
   const config = TRAINING_CONFIG[mode];
+  const requestedEpochs = Math.max(1, Math.floor(hooks.maxEpochs ?? config.epochs));
+  const allowEarlyStop = hooks.allowEarlyStop ?? true;
   const xs = tf.tensor3d(X);
   const ys = tf.tensor2d(Y);
   const history: EpochMetrics[] = [];
@@ -429,11 +456,14 @@ export async function trainModel(
   let epochStart = start;
   let epochsRun = 0;
   let bestValLoss: number | null = null;
+  let bestValMae: number | null = null;
+  let bestEpoch: number | null = null;
   let bestWeights: tf.Tensor[] | null = null;
   let earlyWait = config.earlyStoppingPatience;
   let plateauWait = config.lrPlateauPatience;
   let learningRate = config.learningRate;
   let stoppedEarly = false;
+  let cancelled = false;
 
   const uiCallback = new tf.CustomCallback({
     onEpochBegin: async () => {
@@ -443,10 +473,14 @@ export async function trainModel(
       epochsRun = epoch + 1;
       const loss = typeof logs?.loss === 'number' ? logs.loss : Number.NaN;
       const valLoss = typeof logs?.val_loss === 'number' ? logs.val_loss : null;
+      const mae = typeof logs?.mae === 'number' ? logs.mae : Number.NaN;
+      const valMae = typeof logs?.val_mae === 'number' ? logs.val_mae : null;
 
       if (valLoss !== null) {
         if (bestValLoss === null || valLoss < bestValLoss - config.minDelta) {
           bestValLoss = valLoss;
+          bestValMae = valMae;
+          bestEpoch = epochsRun;
           // Snapshot the new best checkpoint (one snapshot kept at a time).
           for (const tensor of bestWeights ?? []) tensor.dispose();
           bestWeights = model.getWeights().map((weight) => weight.clone());
@@ -460,7 +494,7 @@ export async function trainModel(
             setLearningRate(model, learningRate);
             plateauWait = config.lrPlateauPatience;
           }
-          if (earlyWait <= 0) {
+          if (allowEarlyStop && earlyWait <= 0) {
             stoppedEarly = true;
             model.stopTraining = true;
           }
@@ -469,24 +503,31 @@ export async function trainModel(
 
       const metrics: EpochMetrics = {
         epoch: epochsRun,
-        totalEpochs: config.epochs,
+        totalEpochs: requestedEpochs,
         loss,
         valLoss,
+        mae,
+        valMae,
         bestValLoss,
+        bestEpoch,
+        bestValMae,
         learningRate,
         durationMs: performance.now() - epochStart,
       };
       history.push(metrics);
       await hooks.onEpochEnd?.(metrics);
 
-      if (hooks.shouldCancel?.()) model.stopTraining = true;
+      if (hooks.shouldCancel?.() && epochsRun < requestedEpochs) {
+        cancelled = true;
+        model.stopTraining = true;
+      }
       await tf.nextFrame();
     },
   });
 
   try {
     await model.fit(xs, ys, {
-      epochs: config.epochs,
+      epochs: requestedEpochs,
       batchSize: config.batchSize,
       shuffle: true,
       validationSplit: config.validationSplit,
@@ -495,7 +536,7 @@ export async function trainModel(
     });
 
     // Put the best checkpoint back: the saved model is the one that scored
-    // `bestValLoss`, not the last (possibly overfitted) set of weights.
+    // `bestValLoss`, not the last (possibly overfitted or cancelled) weights.
     if (bestWeights) model.setWeights(bestWeights);
   } finally {
     const checkpoints = bestWeights as tf.Tensor[] | null;
@@ -506,9 +547,12 @@ export async function trainModel(
 
   return {
     epochsRun,
-    epochsRequested: config.epochs,
-    stoppedEarly: stoppedEarly || epochsRun < config.epochs,
+    epochsRequested: requestedEpochs,
+    stoppedEarly: stoppedEarly || (!cancelled && epochsRun > 0 && epochsRun < requestedEpochs),
+    cancelled,
     bestValLoss,
+    bestValMae,
+    bestEpoch,
     finalLoss: history.length > 0 ? history[history.length - 1].loss : null,
     durationMs: performance.now() - start,
     history,
@@ -519,6 +563,14 @@ export async function trainModel(
 // Backtesting
 // ---------------------------------------------------------------------------
 
+export interface BacktestBaseline {
+  /** Expected main-number matches for a uniformly random 5/49 grid. */
+  avgMatches: number;
+  /** Chance that a random grid gets >= 2 numbers or the Chance ball. */
+  winRate: number;
+  chanceRate: number;
+}
+
 export interface BacktestResult {
   testSize: number;
   avgMatches: number;
@@ -526,6 +578,31 @@ export interface BacktestResult {
   chanceRate: number;
   bestMatches: number;
   distribution: Record<number, number>;
+  /** Uniform-random reference, so the score can be read against luck. */
+  baseline: BacktestBaseline;
+}
+
+function combination(n: number, k: number): number {
+  if (k < 0 || k > n) return 0;
+  let result = 1;
+  for (let i = 1; i <= k; i++) result = (result * (n - k + i)) / i;
+  return result;
+}
+
+/** Exact uniform-random reference under the hypergeometric distribution. */
+function randomBaseline(): BacktestBaseline {
+  const total = combination(MAX_MAIN, MAIN_COUNT);
+  const none = combination(MAX_MAIN - MAIN_COUNT, MAIN_COUNT) / total;
+  const one = (combination(MAIN_COUNT, 1) * combination(MAX_MAIN - MAIN_COUNT, MAIN_COUNT - 1)) / total;
+  const twoOrMore = 1 - none - one;
+  const chance = 1 / (MAX_CHANCE - MIN_CHANCE + 1);
+
+  return {
+    avgMatches: (MAIN_COUNT * MAIN_COUNT) / MAX_MAIN,
+    // Same definition as the model metric: >= 2 numbers OR the Chance ball.
+    winRate: (twoOrMore + (none + one) * chance) * 100,
+    chanceRate: chance * 100,
+  };
 }
 
 /**
@@ -545,30 +622,24 @@ export async function runBacktest(
   const trainData = processed.slice(0, splitIndex);
   const evalData = processed.slice(splitIndex - windowLength);
 
-  const { X, Y, scaler } = createDataset(trainData, windowLength);
+  const config = TRAINING_CONFIG.precise;
+  const backtestEpochs = Math.min(config.epochs, 30);
+  const { X, Y, scaler } = createDataset(trainData, windowLength, config.validationSplit);
   const { X: XTest, Y: YTest } = buildScaledWindows(evalData, windowLength, scaler);
   if (X.length === 0 || XTest.length === 0) return null;
 
   const model = buildAdvancedModel(windowLength, NUM_FEATURES, NUM_LABELS);
   prepareForTraining(model, 'precise');
-  const config = TRAINING_CONFIG.precise;
 
-  const xs = tf.tensor3d(X);
-  const ys = tf.tensor2d(Y);
   const xTest = tf.tensor3d(XTest);
   try {
-    await model.fit(xs, ys, {
-      epochs: Math.min(config.epochs, 30),
-      batchSize: config.batchSize,
-      shuffle: true,
-      validationSplit: config.validationSplit,
-      verbose: 0,
-      callbacks: {
-        onEpochEnd: async (epoch, logs) => {
-          onProgress?.('training', Math.round(((epoch + 1) / Math.min(config.epochs, 30)) * 70));
-          void logs;
-          await tf.nextFrame();
-        },
+    await trainModel(model, X, Y, 'precise', {
+      maxEpochs: backtestEpochs,
+      // The backtest must judge the full schedule, then restore the best
+      // validation checkpoint instead of the last (possibly overfitted) one.
+      allowEarlyStop: false,
+      onEpochEnd: (metrics) => {
+        onProgress?.('training', Math.round((metrics.epoch / backtestEpochs) * 70));
       },
     });
 
@@ -611,10 +682,9 @@ export async function runBacktest(
       chanceRate: (chanceHits / total) * 100,
       bestMatches,
       distribution,
+      baseline: randomBaseline(),
     };
   } finally {
-    xs.dispose();
-    ys.dispose();
     xTest.dispose();
     model.dispose();
   }

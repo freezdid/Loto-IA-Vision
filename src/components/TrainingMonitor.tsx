@@ -14,6 +14,8 @@ interface TrainingMonitorProps {
   onModeChange: (mode: TrainingMode) => void;
   windowLength: number;
   onWindowChange: (value: number) => void;
+  fullTraining: boolean;
+  onFullTrainingChange: (value: boolean) => void;
   training: TrainingState;
   model: ModelSummary | null;
   drawCount: number;
@@ -30,6 +32,8 @@ export function TrainingMonitor({
   onModeChange,
   windowLength,
   onWindowChange,
+  fullTraining,
+  onFullTrainingChange,
   training,
   model,
   drawCount,
@@ -44,6 +48,35 @@ export function TrainingMonitor({
   const progress = training.totalEpochs > 0 ? Math.round((training.epoch / training.totalEpochs) * 100) : 0;
   const shownLoss = training.loss ?? lastMetric?.loss ?? null;
   const shownValLoss = training.valLoss ?? lastMetric?.valLoss ?? null;
+  const bestEpoch = training.bestEpoch ?? lastMetric?.bestEpoch ?? null;
+  const bestValMae = training.bestValMae ?? lastMetric?.bestValMae ?? null;
+  const hasRun = training.history.length > 0 && training.status !== 'idle';
+
+  const epochNote = isTraining
+    ? 'en cours'
+    : training.status === 'cancelled'
+      ? 'arrêté'
+      : training.status === 'error'
+        ? 'interrompu'
+        : training.status === 'done'
+          ? training.stoppedEarly
+            ? 'arrêt anticipé'
+            : 'terminé'
+          : '';
+
+  const runSummary = !isTraining && hasRun
+    ? training.status === 'cancelled'
+      ? `Entraînement arrêté à ${training.epoch}/${training.totalEpochs} époques · modèle partiel conservé`
+      : training.status === 'error'
+        ? 'Entraînement interrompu · relancez pour réessayer'
+        : training.stoppedEarly
+          ? `Arrêt anticipé à ${training.epoch}/${training.totalEpochs} · meilleure époque ${bestEpoch ?? '—'} · le meilleur checkpoint est conservé`
+          : `Entraînement terminé · ${training.epoch}/${training.totalEpochs} époques${
+              bestEpoch !== null ? ` · meilleur checkpoint époque ${bestEpoch}` : ''
+            }`
+    : null;
+
+  const maeLabel = bestValMae !== null ? `MAE validation ${bestValMae.toFixed(3)}` : null;
 
   return (
     <section aria-label="Studio d'entraînement" className="panel space-y-5 p-5 sm:p-6">
@@ -51,15 +84,27 @@ export function TrainingMonitor({
         <div>
           <h2 className="text-lg font-black tracking-tight text-ink">Studio d’entraînement</h2>
           <p className="mt-1 text-[13px] text-muted">
-            Réseau bi-directionnel entraîné sur {drawCount > 0 ? drawCount.toLocaleString('fr-FR') : '—'} tirages réels
+            Réseau LSTM entraîné sur {drawCount > 0 ? drawCount.toLocaleString('fr-FR') : '—'} tirages réels
           </p>
         </div>
         <span
           className={`chip shrink-0 ${
-            isTraining ? 'bg-primary/15 text-primary-soft' : model ? 'bg-success/15 text-success' : 'bg-white/5 text-faint'
+            isTraining
+              ? 'bg-primary/15 text-primary-soft'
+              : model
+                ? training.status === 'cancelled' || training.status === 'error'
+                  ? 'bg-white/5 text-muted'
+                  : 'bg-success/15 text-success'
+                : 'bg-white/5 text-faint'
           }`}
         >
-          {isTraining ? 'Entraînement' : model ? 'Modèle prêt' : 'Non entraîné'}
+          {isTraining
+            ? 'Entraînement'
+            : model
+              ? training.status === 'cancelled' || training.status === 'error'
+                ? 'Modèle partiel'
+                : 'Modèle prêt'
+              : 'Non entraîné'}
         </span>
       </div>
 
@@ -71,6 +116,11 @@ export function TrainingMonitor({
           <span className="tile-value">
             {training.epoch > 0 ? `${training.epoch}/${training.totalEpochs}` : `0/${training.totalEpochs}`}
           </span>
+          {epochNote && (
+            <span className="mt-0.5 block text-[10px] font-bold uppercase tracking-[0.06em] text-faint">
+              {epochNote}
+            </span>
+          )}
         </div>
         <div className="tile">
           <span className="tile-label">Perte</span>
@@ -81,7 +131,7 @@ export function TrainingMonitor({
           <span className="tile-value">{shownValLoss !== null ? shownValLoss.toFixed(4) : '—'}</span>
         </div>
         <div className="tile">
-          <span className="tile-label">Pas d’apprentissage</span>
+          <span className="tile-label">Taux d’apprentissage</span>
           <span className="tile-value">{training.learningRate.toExponential(1)}</span>
         </div>
       </div>
@@ -135,6 +185,16 @@ export function TrainingMonitor({
         </div>
       </div>
 
+      {runSummary && (
+        <div
+          role="status"
+          className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-xl bg-white/[0.03] px-3.5 py-2.5 text-[11px] leading-relaxed text-muted"
+        >
+          <span className="font-bold text-ink">{runSummary}</span>
+          {maeLabel && <span className="tabular text-faint">· {maeLabel}</span>}
+        </div>
+      )}
+
       {isTraining && (
         <div className="space-y-1.5">
           <div className="flex justify-between text-xs font-bold">
@@ -162,8 +222,9 @@ export function TrainingMonitor({
                 key={key}
                 type="button"
                 onClick={() => onModeChange(key)}
+                disabled={isTraining}
                 aria-pressed={active}
-                className={`rounded-xl px-3 py-2.5 text-left transition-colors ${
+                className={`rounded-xl px-3 py-2.5 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-55 ${
                   active ? 'bg-primary/15 ring-1 ring-primary/40' : 'bg-white/5 hover:bg-white/8'
                 }`}
               >
@@ -217,8 +278,41 @@ export function TrainingMonitor({
 
         {showAdvanced && (
           <div className="space-y-3 rounded-xl bg-white/[0.03] p-3.5">
-            <div className="flex items-center justify-between gap-3">
-              <div>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-xs font-bold text-muted">Politique d’arrêt</p>
+                <p className="text-[11px] text-faint">
+                  Complet : toutes les époques. Anticipé : stoppe si la validation stagne.
+                </p>
+              </div>
+              <div className="flex shrink-0 gap-1.5" role="group" aria-label="Politique d'arrêt">
+                <button
+                  type="button"
+                  onClick={() => onFullTrainingChange(true)}
+                  aria-pressed={fullTraining}
+                  disabled={isTraining}
+                  className={`rounded-lg px-3 py-1.5 text-xs font-extrabold transition-colors disabled:cursor-not-allowed disabled:opacity-45 ${
+                    fullTraining ? 'bg-primary text-white' : 'bg-white/5 text-muted hover:bg-white/10'
+                  }`}
+                >
+                  Complet
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onFullTrainingChange(false)}
+                  aria-pressed={!fullTraining}
+                  disabled={isTraining}
+                  className={`rounded-lg px-3 py-1.5 text-xs font-extrabold transition-colors disabled:cursor-not-allowed disabled:opacity-45 ${
+                    !fullTraining ? 'bg-primary text-white' : 'bg-white/5 text-muted hover:bg-white/10'
+                  }`}
+                >
+                  Anticipé
+                </button>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="min-w-0">
                 <p className="text-xs font-bold text-muted">Fenêtre d’analyse</p>
                 <p className="text-[11px] text-faint">Nombre de tirages passés lus par le réseau</p>
               </div>
@@ -229,7 +323,8 @@ export function TrainingMonitor({
                     type="button"
                     onClick={() => onWindowChange(value)}
                     aria-pressed={windowLength === value}
-                    className={`rounded-lg px-3 py-1.5 text-xs font-extrabold tabular transition-colors ${
+                    disabled={isTraining}
+                    className={`rounded-lg px-3 py-1.5 text-xs font-extrabold tabular transition-colors disabled:cursor-not-allowed disabled:opacity-45 ${
                       windowLength === value ? 'bg-primary text-white' : 'bg-white/5 text-muted hover:bg-white/10'
                     }`}
                   >

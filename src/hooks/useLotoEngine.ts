@@ -31,27 +31,42 @@ import {
   loadDraws,
   loadLastPrediction,
   loadModel,
+  loadModelMeta,
   loadPredictions,
   saveDraws,
   saveLastPrediction,
   saveModel,
+  saveModelMeta,
   savePredictions,
 } from '@/lib/storage';
+import type { TrainingSnapshot } from '@/lib/storage';
 
 export interface ToastState {
   message: string;
   tone: 'success' | 'info' | 'error';
 }
 
+export type TrainingStatus = 'idle' | 'running' | 'done' | 'cancelled' | 'error';
+
 export interface TrainingState {
-  status: 'idle' | 'running';
+  status: TrainingStatus;
   epoch: number;
   totalEpochs: number;
   loss: number | null;
   valLoss: number | null;
+  mae: number | null;
+  valMae: number | null;
   bestValLoss: number | null;
+  bestValMae: number | null;
+  bestEpoch: number | null;
   learningRate: number;
   history: EpochMetrics[];
+  stoppedEarly: boolean;
+  cancelled: boolean;
+  fullTraining: boolean;
+  startedAt: number | null;
+  finishedAt: number | null;
+  durationMs: number | null;
 }
 
 export interface ModelSummary {
@@ -59,6 +74,12 @@ export interface ModelSummary {
   window: number;
   mode: TrainingMode;
   trainedAt: number | null;
+  bestValLoss: number | null;
+  bestValMae: number | null;
+  bestEpoch: number | null;
+  epochsRun: number;
+  totalEpochs: number;
+  stoppedEarly: boolean;
 }
 
 export interface BacktestState {
@@ -69,16 +90,51 @@ export interface BacktestState {
 
 const MAX_HISTORY = 50;
 
-const idleTraining = (mode: TrainingMode): TrainingState => ({
+const idleTraining = (mode: TrainingMode, fullTraining = true): TrainingState => ({
   status: 'idle',
   epoch: 0,
   totalEpochs: TRAINING_CONFIG[mode].epochs,
   loss: null,
   valLoss: null,
+  mae: null,
+  valMae: null,
   bestValLoss: null,
+  bestValMae: null,
+  bestEpoch: null,
   learningRate: TRAINING_CONFIG[mode].learningRate,
   history: [],
+  stoppedEarly: false,
+  cancelled: false,
+  fullTraining,
+  startedAt: null,
+  finishedAt: null,
+  durationMs: null,
 });
+
+/** Restore the last run (curve, epoch count, stop reason) after a reload. */
+const trainingFromSnapshot = (snapshot: TrainingSnapshot): TrainingState => {
+  const last = snapshot.history[snapshot.history.length - 1];
+  return {
+    status: snapshot.cancelled ? 'cancelled' : 'done',
+    epoch: snapshot.epochsRun,
+    totalEpochs: snapshot.totalEpochs,
+    loss: last?.loss ?? null,
+    valLoss: last?.valLoss ?? null,
+    mae: last?.mae ?? null,
+    valMae: last?.valMae ?? null,
+    bestValLoss: snapshot.bestValLoss,
+    bestValMae: snapshot.bestValMae,
+    bestEpoch: snapshot.bestEpoch,
+    learningRate: last?.learningRate ?? TRAINING_CONFIG[snapshot.mode].learningRate,
+    history: snapshot.history,
+    stoppedEarly: snapshot.stoppedEarly,
+    cancelled: snapshot.cancelled,
+    fullTraining: snapshot.fullTraining,
+    startedAt: snapshot.trainedAt - (snapshot.durationMs ?? 0),
+    finishedAt: snapshot.trainedAt,
+    durationMs: snapshot.durationMs,
+  };
+};
 
 /**
  * Single source of truth for the studio: draw history, LSTM training,
@@ -98,6 +154,7 @@ export function useLotoEngine() {
 
   const [mode, setMode] = useState<TrainingMode>('precise');
   const [windowLength, setWindowLength] = useState(12);
+  const [fullTraining, setFullTraining] = useState(true);
   const [training, setTraining] = useState<TrainingState>(() => idleTraining('precise'));
   const [model, setModel] = useState<ModelSummary | null>(null);
   const [hasStoredModel, setHasStoredModel] = useState(false);
@@ -217,8 +274,16 @@ export function useLotoEngine() {
       const currentModel = modelRef.current;
       const scaler = scalerRef.current;
       const currentProfile = profileRef.current;
-      if (!currentModel || !scaler || !currentProfile) {
+      if (!currentModel) {
         notify('Entraînez d’abord le modèle pour générer des grilles', 'info');
+        return;
+      }
+      if (!scaler) {
+        notify('Normalisation du modèle indisponible : relancez un entraînement', 'error');
+        return;
+      }
+      if (!currentProfile) {
+        notify('Historique insuffisant pour générer une grille', 'error');
         return;
       }
 
@@ -272,7 +337,8 @@ export function useLotoEngine() {
       }
 
       cancelRef.current = false;
-      setTraining({ ...idleTraining(trainingMode), status: 'running' });
+      const config = TRAINING_CONFIG[trainingMode];
+      setTraining({ ...idleTraining(trainingMode, fullTraining), status: 'running', startedAt: Date.now() });
       await tf.nextFrame();
 
       try {
@@ -294,7 +360,7 @@ export function useLotoEngine() {
           workingModel?.dispose();
           workingModel = buildModel(trainingMode, windowLength);
           modelRef.current = workingModel;
-          const dataset = createDataset(processed, windowLength);
+          const dataset = createDataset(processed, windowLength, config.validationSplit);
           scalerRef.current = dataset.scaler;
           X = dataset.X;
           Y = dataset.Y;
@@ -304,43 +370,116 @@ export function useLotoEngine() {
         prepareForTraining(workingModel, trainingMode);
 
         const summary = await trainModel(workingModel, X, Y, trainingMode, {
+          maxEpochs: config.epochs,
+          allowEarlyStop: !fullTraining,
           onEpochEnd: (metrics) =>
             setTraining((previous) => ({
               ...previous,
               epoch: metrics.epoch,
               loss: metrics.loss,
               valLoss: metrics.valLoss,
+              mae: metrics.mae,
+              valMae: metrics.valMae,
               bestValLoss: metrics.bestValLoss,
+              bestValMae: metrics.bestValMae,
+              bestEpoch: metrics.bestEpoch,
               learningRate: metrics.learningRate,
               history: [...previous.history, metrics],
             })),
           shouldCancel: () => cancelRef.current,
         });
 
-        await saveModel(workingModel);
+        if (summary.epochsRun === 0) {
+          modelRef.current?.dispose();
+          modelRef.current = null;
+          setModel(null);
+          setHasStoredModel(false);
+          setTraining((previous) => ({
+            ...previous,
+            status: 'cancelled',
+            cancelled: true,
+            finishedAt: Date.now(),
+          }));
+          notify('Entraînement arrêté avant la première époque : aucun modèle enregistré', 'info');
+          return;
+        }
+
+        const trainedAt = Date.now();
+        const params = countTrainableParams(workingModel);
+        const saved = await saveModel(workingModel);
+        const snapshot: TrainingSnapshot = {
+          version: 1,
+          mode: trainingMode,
+          window: windowLength,
+          params,
+          trainedAt,
+          bestValLoss: summary.bestValLoss,
+          bestValMae: summary.bestValMae,
+          bestEpoch: summary.bestEpoch,
+          epochsRun: summary.epochsRun,
+          totalEpochs: summary.epochsRequested,
+          stoppedEarly: summary.stoppedEarly,
+          cancelled: summary.cancelled,
+          fullTraining,
+          durationMs: summary.durationMs,
+          history: summary.history,
+          scaler: scalerRef.current
+            ? { means: [...scalerRef.current.means], stds: [...scalerRef.current.stds] }
+            : null,
+        };
+        if (saved) await saveModelMeta(snapshot);
+
         setModel({
-          params: countTrainableParams(workingModel),
+          params,
           window: windowLength,
           mode: trainingMode,
-          trainedAt: Date.now(),
+          trainedAt,
+          bestValLoss: summary.bestValLoss,
+          bestValMae: summary.bestValMae,
+          bestEpoch: summary.bestEpoch,
+          epochsRun: summary.epochsRun,
+          totalEpochs: summary.epochsRequested,
+          stoppedEarly: summary.stoppedEarly,
         });
-        setHasStoredModel(true);
-        setPendingUpdates(0);
+        setHasStoredModel(saved);
+        if (!summary.cancelled) setPendingUpdates(0);
 
-        notify(
-          `Modèle ${TRAINING_CONFIG[trainingMode].label} prêt : ${summary.epochsRun} époques${
-            summary.bestValLoss !== null ? `, erreur ${summary.bestValLoss.toFixed(3)}` : ''
-          }`,
-          'success',
-        );
-        await generate();
+        setTraining((previous) => ({
+          ...previous,
+          status: summary.cancelled ? 'cancelled' : 'done',
+          epoch: summary.epochsRun,
+          totalEpochs: summary.epochsRequested,
+          loss: summary.finalLoss ?? previous.loss,
+          bestValLoss: summary.bestValLoss,
+          bestValMae: summary.bestValMae,
+          bestEpoch: summary.bestEpoch,
+          stoppedEarly: summary.stoppedEarly,
+          cancelled: summary.cancelled,
+          durationMs: summary.durationMs,
+          finishedAt: trainedAt,
+        }));
+
+        const metric = summary.bestValMae !== null ? `, MAE validation ${summary.bestValMae.toFixed(3)}` : '';
+        const early = summary.stoppedEarly ? ', arrêt anticipé' : '';
+        const persistence = saved ? '' : ' · non sauvegardé';
+        if (summary.cancelled) {
+          notify(
+            `Entraînement arrêté à ${summary.epochsRun}/${summary.epochsRequested} époques${metric}${persistence}`,
+            'info',
+          );
+        } else {
+          notify(
+            `Modèle ${config.label} prêt : ${summary.epochsRun}/${summary.epochsRequested} époques${early}${metric}${persistence}`,
+            saved ? 'success' : 'info',
+          );
+          await generate();
+        }
       } catch (error) {
+        setTraining((previous) => ({ ...previous, status: 'error', finishedAt: Date.now() }));
         notify(`Entraînement interrompu : ${errorMessage(error)}`, 'error');
-      } finally {
-        setTraining((previous) => ({ ...previous, status: 'idle' }));
       }
     },
-    [generate, mode, notify, windowLength],
+    [fullTraining, generate, mode, notify, windowLength],
   );
 
   // -------------------------------------------------------------------------
@@ -443,11 +582,12 @@ export function useLotoEngine() {
       if (disposed) return;
       setBackend(backendName.toUpperCase());
 
-      const [localDraws, savedHistory, lastGrids, modelExists] = await Promise.all([
+      const [localDraws, savedHistory, lastGrids, modelExists, savedMeta] = await Promise.all([
         loadDraws(),
         loadPredictions(),
         loadLastPrediction(),
         hasSavedModel(),
+        loadModelMeta(),
       ]);
       if (disposed) return;
 
@@ -461,17 +601,74 @@ export function useLotoEngine() {
         if (loaded) {
           const shape = loaded.inputs[0].shape;
           const features = Number(shape[2] ?? 0);
+          const loadedWindow = Number(shape[1] ?? 12);
+          const loadedMode: TrainingMode = loaded.name === 'loto-turbo' ? 'fast' : 'precise';
+          const metaMatches = Boolean(
+            savedMeta && savedMeta.mode === loadedMode && savedMeta.window === loadedWindow,
+          );
+
           if (features === 25) {
             modelRef.current = loaded;
-            setModel({
-              params: countTrainableParams(loaded),
-              window: Number(shape[1] ?? 12),
-              mode: loaded.name === 'loto-turbo' ? 'fast' : 'precise',
-              trainedAt: null,
-            });
+            // Keep the UI aligned with the architecture actually loaded, even
+            // when the training metadata is missing or stale.
+            setMode(loadedMode);
+            setWindowLength(loadedWindow);
+            const scalerSnapshot = savedMeta?.scaler;
+            const scalerValid = Boolean(
+              metaMatches &&
+                scalerSnapshot &&
+                scalerSnapshot.means.length === features &&
+                scalerSnapshot.stds.length === features &&
+                scalerSnapshot.means.every((value) => Number.isFinite(value)) &&
+                scalerSnapshot.stds.every((value) => Number.isFinite(value) && value > 0),
+            );
+
+            if (scalerValid && scalerSnapshot) {
+              const scaler = new StandardScaler();
+              scaler.means = [...scalerSnapshot.means];
+              scaler.stds = [...scalerSnapshot.stds];
+              scalerRef.current = scaler;
+            }
+
+            if (metaMatches && savedMeta) {
+              setFullTraining(savedMeta.fullTraining ?? true);
+              setTraining(trainingFromSnapshot(savedMeta));
+              setModel({
+                params: savedMeta.params,
+                window: savedMeta.window,
+                mode: savedMeta.mode,
+                trainedAt: savedMeta.trainedAt,
+                bestValLoss: savedMeta.bestValLoss,
+                bestValMae: savedMeta.bestValMae,
+                bestEpoch: savedMeta.bestEpoch,
+                epochsRun: savedMeta.epochsRun,
+                totalEpochs: savedMeta.totalEpochs,
+                stoppedEarly: savedMeta.stoppedEarly,
+              });
+            } else {
+              setModel({
+                params: countTrainableParams(loaded),
+                window: loadedWindow,
+                mode: loadedMode,
+                trainedAt: null,
+                bestValLoss: null,
+                bestValMae: null,
+                bestEpoch: null,
+                epochsRun: 0,
+                totalEpochs: TRAINING_CONFIG[loadedMode].epochs,
+                stoppedEarly: false,
+              });
+            }
+
+            if (!scalerValid) {
+              notify('Modèle chargé sans normalisation : relancez un entraînement pour générer des grilles', 'info');
+            }
           } else {
             loaded.dispose();
+            setHasStoredModel(false);
           }
+        } else {
+          setHasStoredModel(false);
         }
       }
 
@@ -531,7 +728,7 @@ export function useLotoEngine() {
     return () => {
       disposed = true;
     };
-  }, [applyDraws, rememberHistory, refreshDraws]);
+  }, [applyDraws, notify, rememberHistory, refreshDraws]);
 
   return {
     // data
@@ -551,6 +748,8 @@ export function useLotoEngine() {
     setMode,
     windowLength,
     setWindowLength,
+    fullTraining,
+    setFullTraining,
     training,
     model,
     hasStoredModel,
